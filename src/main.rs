@@ -1,7 +1,7 @@
 mod arguments;
 mod dir_watcher;
 mod import;
-mod playground_state;
+mod platter_state;
 
 use colabrodo_server::server::{server_main_with_command_queue, tokio, ServerOptions};
 use log::{self, info};
@@ -24,7 +24,7 @@ async fn main() {
 
     let (watcher_tx, mut watcher_rx) = tokio::sync::mpsc::channel(16);
 
-    let init = playground_state::PlaygroundInit {
+    let init = platter_state::PlaygroundInit {
         watcher_command_stream: watcher_tx,
     };
 
@@ -48,10 +48,7 @@ async fn main() {
             }
 
             command_tx
-                .send(playground_state::PlatterCommand::LoadFile(
-                    name.clone(),
-                    None,
-                ))
+                .send(platter_state::PlatterCommand::LoadFile(name.clone(), None))
                 .await
                 .unwrap();
         }
@@ -64,9 +61,7 @@ async fn main() {
             }
 
             command_tx
-                .send(playground_state::PlatterCommand::WatchDirectory(
-                    dir.clone(),
-                ))
+                .send(platter_state::PlatterCommand::WatchDirectory(dir.clone()))
                 .await
                 .unwrap();
         }
@@ -76,6 +71,6 @@ async fn main() {
 
     info!("Starting up.");
 
-    server_main_with_command_queue::<playground_state::PlatterState>(opts, init, Some(command_rx))
+    server_main_with_command_queue::<platter_state::PlatterState>(opts, init, Some(command_rx))
         .await;
 }

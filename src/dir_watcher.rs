@@ -1,7 +1,7 @@
 use std::fs;
 use std::path::PathBuf;
 
-use crate::{arguments::Directory, playground_state::PlatterCommand};
+use crate::{arguments::Directory, platter_state::PlatterCommand};
 use colabrodo_server::server::tokio;
 use notify::event::CreateKind;
 use notify::EventKind;
