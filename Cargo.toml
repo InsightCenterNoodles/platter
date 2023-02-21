@@ -7,8 +7,17 @@ edition = "2021"
 
 [dependencies]
 clap = { version = "4.1", features = ["derive"] }
-colabrodo_core = { git = 'https://github.com/InsightCenterNoodles/colabrodo', branch = "develop" }
+colabrodo_server = { git = 'https://github.com/InsightCenterNoodles/colabrodo', branch = "develop" }
+colabrodo_common = { git = 'https://github.com/InsightCenterNoodles/colabrodo', branch = "develop" }
 env_logger = "0.10.0"
 log = "0.4"
 notify = { version = "5.1", default-features = false, features = ["macos_kqueue"] }
 russimp = { version = "2.0", features = ["static-link"] }
+
+[dependencies.uuid]
+version = "1.3"
+features = [
+    "v4",                
+    "fast-rng",          
+    "macro-diagnostics", 
+]

@@ -3,7 +3,7 @@ mod dir_watcher;
 mod import;
 mod playground_state;
 
-use colabrodo_core::server::{tokio, ServerOptions};
+use colabrodo_server::server::{server_main_with_command_queue, tokio, ServerOptions};
 use log::{self, info};
 use std::env;
 
@@ -14,47 +14,68 @@ async fn main() {
     }
     env_logger::init();
 
-    // we have a silly thing here with double parsing args
-
     let args = arguments::get_arguments();
 
-    let mut opts = ServerOptions::default();
+    let opts = ServerOptions {
+        host: format!("{}:{}", args.address, args.port),
+    };
 
-    opts.host = format!("{}:{}", args.address, args.port);
+    let (command_tx, command_rx) = tokio::sync::mpsc::channel(16);
+
+    let (watcher_tx, mut watcher_rx) = tokio::sync::mpsc::channel(16);
+
+    let init = playground_state::PlaygroundInit {
+        watcher_command_stream: watcher_tx,
+    };
+
+    let spawner_tx_clone = command_tx.clone();
+
+    tokio::spawn(async move {
+        while let Some(msg) = watcher_rx.recv().await {
+            tokio::spawn(dir_watcher::launch_file_watcher(
+                spawner_tx_clone.clone(),
+                msg.1,
+                msg.0,
+            ));
+        }
+    });
 
     match args.source {
-        arguments::Source::File { name } => {
+        arguments::Source::File { ref name } => {
             if !name.try_exists().unwrap() {
                 log::error!("File {} is not readable.", name.display());
                 panic!("Unable to continue");
             }
 
-            // the server will parse again to get the args.
-            // TODO: Figure out a better way to send startup info to the server
-            colabrodo_core::server::server_main::<playground_state::PlaygroundState>(opts).await;
+            command_tx
+                .send(playground_state::PlatterCommand::LoadFile(
+                    name.clone(),
+                    None,
+                ))
+                .await
+                .unwrap();
         }
 
-        arguments::Source::Directory(dir) => {
+        arguments::Source::Watch(ref dir) => {
             // early exit
             if !dir.dir.try_exists().unwrap() {
                 log::error!("Directory {} is not readable.", dir.dir.display());
                 panic!("Unable to continue");
             }
 
-            log::info!("Watching directory {}", dir.dir.display());
-
-            let (tx, rx) = tokio::sync::mpsc::channel(16);
-
-            tokio::spawn(dir_watcher::file_watcher(tx, dir));
-
-            colabrodo_core::server::server_main_with_command_queue::<
-                playground_state::PlaygroundState,
-            >(opts, Some(rx))
-            .await;
+            command_tx
+                .send(playground_state::PlatterCommand::WatchDirectory(
+                    dir.clone(),
+                ))
+                .await
+                .unwrap();
         }
 
         arguments::Source::Websocket { port: _ } => todo!(),
     }
 
     info!("Starting up.");
+
+    server_main_with_command_queue::<playground_state::PlatterState>(opts, init, Some(command_rx))
+        .await;
 }

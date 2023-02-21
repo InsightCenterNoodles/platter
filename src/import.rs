@@ -3,18 +3,10 @@ use std::collections::HashMap;
 use std::path::Path;
 use std::rc::Rc;
 
-use colabrodo_core::common::strings::TAG_USER_HIDDEN;
-use colabrodo_core::server_bufferbuilder;
-use colabrodo_core::server_messages::ComponentReference;
-use colabrodo_core::server_messages::EntityRepresentation;
-use colabrodo_core::server_messages::EntityState;
-use colabrodo_core::server_messages::GeometryPatch;
-use colabrodo_core::server_messages::GeometryState;
-use colabrodo_core::server_messages::MaterialState;
-use colabrodo_core::server_messages::MaterialStateUpdatable;
-use colabrodo_core::server_messages::PBRInfo;
-use colabrodo_core::server_messages::RenderRepresentation;
-use colabrodo_core::server_state::ServerState;
+use colabrodo_common::common::strings::TAG_USER_HIDDEN;
+use colabrodo_server::server_bufferbuilder;
+use colabrodo_server::server_messages::*;
+use colabrodo_server::server_state::*;
 use russimp::material::PropertyTypeInfo;
 use russimp::scene::PostProcess;
 use russimp::scene::Scene;
@@ -71,14 +63,14 @@ impl ImportedScene {
 }
 
 pub struct Object {
-    pub parts: Vec<ComponentReference<EntityState>>,
+    pub parts: Vec<ComponentReference<ServerEntityState>>,
     pub children: Vec<Object>,
 }
 
 #[derive(Default)]
 struct ImportScratch {
-    materials: Vec<ComponentReference<MaterialState>>,
-    meshes: Vec<ComponentReference<GeometryState>>,
+    materials: Vec<ComponentReference<ServerMaterialState>>,
+    meshes: Vec<ComponentReference<ServerGeometryState>>,
 
     nodes: Option<Object>,
 }
@@ -86,7 +78,7 @@ struct ImportScratch {
 impl ImportScratch {
     fn recurse_node(
         &mut self,
-        parent: Option<&ComponentReference<EntityState>>,
+        parent: Option<&ComponentReference<ServerEntityState>>,
         node: &Rc<RefCell<russimp::node::Node>>,
         state: &mut ServerState,
     ) -> Object {
@@ -94,13 +86,13 @@ impl ImportScratch {
 
         log::debug!("Importing node: {}", n.name);
 
-        let mut ent = EntityState {
+        let mut ent = ServerEntityState {
             name: Some(n.name.clone()),
             ..Default::default()
         };
 
         if let Some(x) = parent {
-            ent.extra.parent = Some(x.clone());
+            ent.mutable.parent = Some(x.clone());
         }
 
         let root = state.entities.new_component(ent);
@@ -111,16 +103,17 @@ impl ImportScratch {
         };
 
         for mid in &n.meshes {
-            let mut sub_ent = EntityState::default();
+            let mut sub_ent = ServerEntityState::default();
 
-            sub_ent.extra.parent = Some(root.clone());
-            sub_ent.extra.tags = Some(vec![TAG_USER_HIDDEN.to_string()]);
+            sub_ent.mutable.parent = Some(root.clone());
+            sub_ent.mutable.tags = Some(vec![TAG_USER_HIDDEN.to_string()]);
 
-            sub_ent.extra.representation =
-                Some(EntityRepresentation::Render(RenderRepresentation {
+            sub_ent.mutable.representation = Some(ServerEntityRepresentation::new_render(
+                ServerRenderRepresentation {
                     mesh: self.meshes[*mid as usize].clone(),
                     instances: None,
-                }));
+                },
+            ));
 
             ret.parts.push(state.entities.new_component(sub_ent));
         }
@@ -146,7 +139,7 @@ impl ImportScratch {
 
         const WHITE: [f32; 4] = [1.0, 1.0, 1.0, 1.0];
 
-        let mut pbr = PBRInfo {
+        let mut pbr = ServerPBRInfo {
             metallic: Some(0.0),
             roughness: Some(0.75),
             ..Default::default()
@@ -157,9 +150,9 @@ impl ImportScratch {
             .or(props.find_color(MK_COLOR_DIFF))
             .unwrap_or(WHITE);
 
-        let new_mat = MaterialState {
+        let new_mat = ServerMaterialState {
             name: props.find_string(MK_NAME),
-            extra: MaterialStateUpdatable {
+            mutable: ServerMaterialStateUpdatable {
                 pbr_info: Some(pbr),
                 ..Default::default()
             },
@@ -210,7 +203,7 @@ impl ImportScratch {
 
         let packed_mesh_info = server_bufferbuilder::create_mesh(state, source);
 
-        let patch = GeometryPatch {
+        let patch = ServerGeometryPatch {
             attributes: packed_mesh_info.attributes,
             vertex_count: packed_mesh_info.vertex_count,
             indices: packed_mesh_info.indices,
@@ -221,7 +214,7 @@ impl ImportScratch {
         log::debug!("Made patch: {patch:?}");
 
         self.meshes
-            .push(state.geometries.new_component(GeometryState {
+            .push(state.geometries.new_component(ServerGeometryState {
                 name: None,
                 patches: vec![patch],
             }));
