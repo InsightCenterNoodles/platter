@@ -4,11 +4,11 @@ use clap::{Args, Parser, Subcommand};
 
 #[derive(Debug, Clone, Subcommand)]
 pub enum Source {
-    /// Publish a single file
+    /// Publish a single file or directory
     File { name: PathBuf },
 
-    /// Publish a directory; new files will be loaded as soon as they appear.
-    Directory(Directory),
+    /// Watch a directory; new files will be loaded as soon as they appear.
+    Watch(Directory),
 
     /// Listen on a websocket for geometry (NYI)
     Websocket { port: String },
@@ -29,7 +29,7 @@ pub struct Directory {
 }
 
 #[derive(Parser)]
-#[command(name = "rusty_playground")]
+#[command(name = "platter")]
 #[command(version = "0.1")]
 #[command(about = "Publish meshes to the NOODLES protocol", long_about = None)]
 pub struct Arguments {
