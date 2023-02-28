@@ -9,6 +9,8 @@ use colabrodo_common::components::MagFilter;
 use colabrodo_common::components::MinFilter;
 use colabrodo_common::components::SamplerMode;
 use colabrodo_server::server_bufferbuilder;
+use colabrodo_server::server_bufferbuilder::VertexFull;
+use colabrodo_server::server_bufferbuilder::VertexSource;
 use colabrodo_server::server_messages::*;
 use colabrodo_server::server_state::*;
 use russimp::material::PropertyTypeInfo;
@@ -16,6 +18,10 @@ use russimp::material::Texture;
 use russimp::material::TextureType;
 use russimp::scene::PostProcess;
 use russimp::scene::Scene;
+
+use crate::object::Object;
+use crate::object::ObjectRoot;
+use crate::platter_state::PlatterState;
 
 const MK_NAME: &str = "?mat.name";
 
@@ -62,8 +68,10 @@ impl ImportedScene {
             PostProcess::Triangulate,
             PostProcess::JoinIdenticalVertices,
             PostProcess::GenerateSmoothNormals,
+            PostProcess::CalculateTangentSpace,
             PostProcess::SortByPrimitiveType,
             PostProcess::GenerateBoundingBoxes,
+            PostProcess::SplitLargeMeshes,
         ];
 
         let scene = Scene::from_file(path_as_str, flags);
@@ -74,18 +82,11 @@ impl ImportedScene {
         }
     }
 
-    pub fn build_objects(&self, state: &mut ServerState) -> Object {
-        let mut scratch = ImportScratch::default();
+    pub fn build_objects(&self, state: &mut PlatterState) -> ObjectRoot {
+        let scratch = ImportScratch::default();
 
-        scratch.build(&self.data, state);
-
-        scratch.nodes.unwrap()
+        scratch.build(&self.data, state)
     }
-}
-
-pub struct Object {
-    pub parts: Vec<ComponentReference<ServerEntityState>>,
-    pub children: Vec<Object>,
 }
 
 #[derive(Clone)]
@@ -107,6 +108,7 @@ impl Eq for AssimpTexture {}
 
 #[derive(Default)]
 struct ImportScratch {
+    published: Vec<uuid::Uuid>,
     images: HashMap<AssimpTexture, ComponentReference<ServerImageState>>,
     materials: Vec<ComponentReference<ServerMaterialState>>,
     meshes: Vec<ComponentReference<ServerGeometryState>>,
@@ -156,10 +158,6 @@ impl ImportScratch {
 
             ret.parts.push(state.entities.new_component(sub_ent));
         }
-
-        //n.name;
-        //server_bufferbuilder::create_mesh(state, source, material)
-        //source.
 
         for child in &n.children {
             let child_obj = self.recurse_node(Some(&root), child, state);
@@ -349,47 +347,73 @@ impl ImportScratch {
         self.materials.push(state.materials.new_component(new_mat));
     }
 
-    fn build_mesh(&mut self, mesh: &russimp::mesh::Mesh, state: &mut ServerState) {
-        let mut source = server_bufferbuilder::VertexSource {
-            positions: convert_vec3d(&mesh.vertices),
-            ..Default::default()
+    fn build_mesh(&mut self, mesh: &russimp::mesh::Mesh, state: &mut PlatterState) {
+        let mut verts = Vec::<server_bufferbuilder::VertexFull>::new();
+
+        let def_vert = VertexFull {
+            position: [0.0; 3],
+            normal: [0.0; 3],
+            tangent: [0.0; 3],
+            texture: [0, 0],
+            color: [255; 4],
         };
 
-        if !mesh.normals.is_empty() {
-            source.normals = convert_vec3d(&mesh.normals);
-        }
+        verts.resize(mesh.vertices.len(), def_vert);
 
-        // TODO: TANGENTS
-        // if !mesh.tangents.is_empty() {
-        //     source. = convert_vec3d(&mesh.normals);
-        // }
+        mod_fill(mesh.vertices.as_slice(), verts.as_mut_slice(), |i, o| {
+            o.position = [i.x, i.y, i.z];
+        });
+
+        mod_fill(mesh.normals.as_slice(), verts.as_mut_slice(), |i, o| {
+            o.normal = [i.x, i.y, i.z];
+        });
+
+        mod_fill(mesh.tangents.as_slice(), verts.as_mut_slice(), |i, o| {
+            o.tangent = [i.x, i.y, i.z];
+        });
 
         // only the first for now
-        if !mesh.texture_coords.is_empty() {
-            if let Some(list) = &mesh.texture_coords[0] {
-                source.textures = convert_tex(list);
-            }
+        if let Some(list) = &mesh.texture_coords[0] {
+            mod_fill(list.as_slice(), verts.as_mut_slice(), |i, o| {
+                o.texture = convert_tex(*i);
+            });
         }
 
         // again only the first
-        if !mesh.colors.is_empty() {
-            if let Some(list) = &mesh.colors[0] {
-                source.colors = convert_color(list);
-            }
+        if let Some(list) = &mesh.colors[0] {
+            mod_fill(list.as_slice(), verts.as_mut_slice(), |i, o| {
+                o.color = convert_color(*i);
+            });
         }
+
+        // fill faces
+
+        let mut new_faces = Vec::<[u32; 3]>::new();
+
+        new_faces.reserve(mesh.faces.len());
 
         for face in &mesh.faces {
             let mut nf: [u32; 3] = [0, 0, 0];
 
             fill_array(&face.0, &mut nf);
 
-            source.triangles.push(nf);
+            new_faces.push(nf);
         }
 
         // find the material
         let mat = self.materials[mesh.material_index as usize].clone();
 
-        let packed_mesh_info = server_bufferbuilder::create_mesh(state, source);
+        let source = VertexSource {
+            name: Some(mesh.name.clone()),
+            vertex: verts.as_slice(),
+            index: server_bufferbuilder::IndexType::Triangles(new_faces.as_slice()),
+        };
+
+        let (packed_mesh_info, pub_id) = state.generate_mesh(source);
+
+        if let Some(pub_id) = pub_id {
+            self.published.push(pub_id);
+        }
 
         let patch = ServerGeometryPatch {
             attributes: packed_mesh_info.attributes,
@@ -401,11 +425,15 @@ impl ImportScratch {
 
         log::debug!("Made patch: {patch:?}");
 
-        self.meshes
-            .push(state.geometries.new_component(ServerGeometryState {
-                name: None,
-                patches: vec![patch],
-            }));
+        self.meshes.push(
+            state
+                .mut_state()
+                .geometries
+                .new_component(ServerGeometryState {
+                    name: None,
+                    patches: vec![patch],
+                }),
+        );
     }
 
     fn build_materials(&mut self, scene: &Scene, state: &mut ServerState) {
@@ -414,18 +442,23 @@ impl ImportScratch {
         }
     }
 
-    fn build_meshes(&mut self, scene: &Scene, state: &mut ServerState) {
+    fn build_meshes(&mut self, scene: &Scene, state: &mut PlatterState) {
         for scene_mesh in &scene.meshes {
             self.build_mesh(scene_mesh, state);
         }
     }
 
-    pub fn build(&mut self, scene: &Scene, state: &mut ServerState) {
+    pub fn build(mut self, scene: &Scene, state: &mut PlatterState) -> ObjectRoot {
         // we need to do materials first, as they will be referenced by meshes
-        self.build_materials(scene, state);
+        self.build_materials(scene, &mut state.mut_state());
         self.build_meshes(scene, state);
 
-        self.nodes = Some(self.recurse_node(None, scene.root.as_ref().unwrap(), state));
+        self.nodes = Some(self.recurse_node(None, scene.root.as_ref().unwrap(), state.mut_state()));
+
+        ObjectRoot {
+            published: self.published,
+            root: self.nodes.unwrap(),
+        }
     }
 }
 
@@ -518,27 +551,28 @@ fn normalize_to_u16(v: f32) -> u16 {
     (v * (u16::MAX as f32)) as u16
 }
 
-fn convert_vec3d(list: &[russimp::Vector3D]) -> Vec<[f32; 3]> {
-    list.iter().map(|v| [v.x, v.y, v.z]).collect()
+fn mod_fill<T, F>(from: &[T], to: &mut [VertexFull], f: F)
+where
+    F: Fn(&T, &mut VertexFull),
+{
+    for (a, b) in from.iter().zip(to.iter_mut()) {
+        f(a, b);
+    }
 }
 
-fn convert_tex(list: &[russimp::Vector3D]) -> Vec<[u16; 2]> {
-    list.iter()
-        .map(|v| [normalize_to_u16(v.x), normalize_to_u16(v.y)])
-        .collect()
+#[inline]
+fn convert_tex(v: russimp::Vector3D) -> [u16; 2] {
+    [normalize_to_u16(v.x), normalize_to_u16(v.y)]
 }
 
-fn convert_color(list: &[russimp::Color4D]) -> Vec<[u8; 4]> {
-    list.iter()
-        .map(|v| {
-            [
-                normalize_to_u8(v.r),
-                normalize_to_u8(v.g),
-                normalize_to_u8(v.b),
-                normalize_to_u8(v.a),
-            ]
-        })
-        .collect()
+#[inline]
+fn convert_color(v: russimp::Color4D) -> [u8; 4] {
+    [
+        normalize_to_u8(v.r),
+        normalize_to_u8(v.g),
+        normalize_to_u8(v.b),
+        normalize_to_u8(v.a),
+    ]
 }
 
 #[inline]

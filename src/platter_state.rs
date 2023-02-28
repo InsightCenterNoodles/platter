@@ -1,27 +1,30 @@
 use crate::arguments;
 use crate::arguments::Directory;
-use crate::import::{ImportedScene, Object};
+use crate::import::ImportedScene;
+use crate::object::ObjectRoot;
 
 use colabrodo_common::server_communication::*;
-use colabrodo_server::server::ciborium;
-use colabrodo_server::server::tokio;
 use colabrodo_server::server::*;
-use colabrodo_server::server_messages::*;
-use colabrodo_server::server_state::*;
+use colabrodo_server::server_bufferbuilder::VertexFull;
+use colabrodo_server::server_bufferbuilder::{IntermediateGeometryPatch, VertexSource};
+use colabrodo_server::server_http::*;
 use std::collections::HashSet;
 use std::fs;
+use std::mem;
 use std::path::PathBuf;
 use std::{collections::HashMap, path::Path};
 
 pub struct PlaygroundInit {
     pub watcher_command_stream: tokio::sync::mpsc::Sender<(Directory, uuid::Uuid)>,
+    pub link: AssetServerLink,
+    pub size_large_limit: u64,
 }
 
 pub struct PlatterState {
     init: PlaygroundInit,
     state: ServerState,
 
-    items: HashMap<u32, Object>,
+    items: HashMap<u32, ObjectRoot>,
     next_item_id: u32,
 
     source_map: HashMap<uuid::Uuid, HashSet<u32>>,
@@ -47,15 +50,6 @@ impl AsyncServer for PlatterState {
             source_map: HashMap::new(),
             source_exclusive: HashSet::new(),
         }
-    }
-
-    fn initialize_state(&mut self) {
-        // match self.init.args.source.clone() {
-        //     arguments::Source::File { name } => self.add_filesystem_item(name.as_path()),
-        //     arguments::Source::Directory(d) if d.load_existing => self.add_dir(d.dir.as_path()),
-        //     arguments::Source::Websocket { port: _ } => todo!(),
-        //     _ => (),
-        // }
     }
 
     fn handle_command(&mut self, c: Self::CommandType) {
@@ -87,8 +81,8 @@ impl AsyncServer for PlatterState {
 }
 
 impl UserServerState for PlatterState {
-    fn mut_state(&mut self) -> &ServerState {
-        &self.state
+    fn mut_state(&mut self) -> &mut ServerState {
+        &mut self.state
     }
 
     fn state(&self) -> &ServerState {
@@ -99,6 +93,7 @@ impl UserServerState for PlatterState {
         &mut self,
         _method: ComponentReference<MethodState>,
         _context: InvokeObj,
+        _client_id: uuid::Uuid,
         _args: Vec<ciborium::value::Value>,
     ) -> MethodResult {
         Err(MethodException::method_not_found(Some(
@@ -118,7 +113,7 @@ impl PlatterState {
         uuid::Uuid::new_v4()
     }
 
-    fn import_object(&mut self, o: Object, source: Option<uuid::Uuid>) -> u32 {
+    fn import_object(&mut self, o: ObjectRoot, source: Option<uuid::Uuid>) -> u32 {
         let id = self.get_next_id();
 
         self.items.insert(id, o);
@@ -151,7 +146,7 @@ impl PlatterState {
 
         match res {
             Ok(x) => {
-                let o = x.build_objects(&mut self.state);
+                let o = x.build_objects(self);
                 self.import_object(o, source);
             }
             Err(e) => {
@@ -175,10 +170,44 @@ impl PlatterState {
     fn clear_source(&mut self, source: uuid::Uuid) {
         if let Some(list) = self.source_map.get_mut(&source) {
             for item in list.iter() {
+                if let Some(obj) = self.items.get(item) {
+                    obj.prepare_remove(&mut self.init.link);
+                }
                 self.items.remove(item);
             }
 
             list.clear();
         }
     }
+
+    pub fn generate_mesh(
+        &mut self,
+        source: VertexSource<VertexFull>,
+    ) -> (IntermediateGeometryPatch, Option<uuid::Uuid>) {
+        if guess_mesh_size(&source) <= self.init.size_large_limit {
+            return (source.build_mesh(&mut self.state).unwrap(), None);
+        }
+
+        let a_id = create_asset_id();
+
+        let intermediate = source
+            .build_mesh_with(&mut self.state, |data| {
+                let url = self
+                    .init
+                    .link
+                    .add_asset(a_id, Asset::new_from_slice(data.as_slice()));
+                log::info!("Large asset published at {url}");
+                colabrodo_server::server_messages::BufferRepresentation::new_from_url(&url)
+            })
+            .unwrap();
+
+        (intermediate, Some(a_id))
+    }
+}
+
+fn guess_mesh_size(source: &VertexSource<VertexFull>) -> u64 {
+    // we can cheat for now and just look at the vertex data
+    let ret = source.vertex.len() * mem::size_of::<VertexFull>();
+
+    return ret.try_into().unwrap();
 }

@@ -3,12 +3,10 @@ name = "platter"
 version = "0.1.0"
 edition = "2021"
 
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
-
 [dependencies]
 clap = { version = "4.1", features = ["derive"] }
-colabrodo_server = { git = 'https://github.com/InsightCenterNoodles/colabrodo', branch = "develop" }
-colabrodo_common = { git = 'https://github.com/InsightCenterNoodles/colabrodo', branch = "develop" }
+colabrodo_server = { git = 'https://github.com/InsightCenterNoodles/colabrodo', tag = "v0.3.0" }
+colabrodo_common = { git = 'https://github.com/InsightCenterNoodles/colabrodo', tag = "v0.3.0" }
 env_logger = "0.10.0"
 log = "0.4"
 notify = { version = "5.1", default-features = false, features = ["macos_kqueue"] }

@@ -1,9 +1,11 @@
 mod arguments;
 mod dir_watcher;
 mod import;
+mod object;
 mod platter_state;
 
 use colabrodo_server::server::{server_main_with_command_queue, tokio, ServerOptions};
+use colabrodo_server::server_http::*;
 use log::{self, info};
 use std::env;
 
@@ -16,20 +18,36 @@ async fn main() {
 
     let args = arguments::get_arguments();
 
+    // Set up options for the noodles server
     let opts = ServerOptions {
         host: format!("{}:{}", args.address, args.port),
     };
 
+    // Prep asset server
+    let (asset_server, mut link) = make_asset_server(AssetServerOptions::default());
+
+    // Launch it
+    tokio::spawn(asset_server);
+
+    // Wait for it to start
+    link.wait_for_start().await;
+
+    // Prep command streams
     let (command_tx, command_rx) = tokio::sync::mpsc::channel(16);
 
+    // Prep streams for the watcher controller
     let (watcher_tx, mut watcher_rx) = tokio::sync::mpsc::channel(16);
 
     let init = platter_state::PlaygroundInit {
         watcher_command_stream: watcher_tx,
+        link,
+        size_large_limit: args.size_large_limit,
     };
 
+    // take a copy of the command sender to move into the watcher command task
     let spawner_tx_clone = command_tx.clone();
 
+    // start up a command task for the watcher: this will spawn new dir watchers upon request.
     tokio::spawn(async move {
         while let Some(msg) = watcher_rx.recv().await {
             tokio::spawn(dir_watcher::launch_file_watcher(
@@ -40,6 +58,7 @@ async fn main() {
         }
     });
 
+    // Based on args, insert an initial command into the command stream
     match args.source {
         arguments::Source::File { ref name } => {
             if !name.try_exists().unwrap() {
@@ -71,6 +90,7 @@ async fn main() {
 
     info!("Starting up.");
 
+    // Launch the main noodles task and wait for it to complete
     server_main_with_command_queue::<platter_state::PlatterState>(opts, init, Some(command_rx))
         .await;
 }

@@ -43,6 +43,10 @@ pub struct Arguments {
     /// Port to listen on for clients
     #[arg(short, long, default_value_t = 50000)]
     pub port: u16,
+
+    /// Size in bytes of a 'large' mesh. Large meshes will not be sent inline.
+    #[arg(short, long, default_value_t = 4096)]
+    pub size_large_limit: u64,
 }
 
 pub fn get_arguments() -> Arguments {
