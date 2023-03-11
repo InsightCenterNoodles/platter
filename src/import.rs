@@ -2,6 +2,8 @@ use std::cell::RefCell;
 use std::collections::HashMap;
 use std::path::Path;
 use std::rc::Rc;
+use std::sync::Arc;
+use std::sync::Mutex;
 
 use colabrodo_common::common::strings::TAG_USER_HIDDEN;
 use colabrodo_common::components::BufferViewState;
@@ -9,8 +11,12 @@ use colabrodo_common::components::MagFilter;
 use colabrodo_common::components::MinFilter;
 use colabrodo_common::components::SamplerMode;
 use colabrodo_server::server_bufferbuilder;
+use colabrodo_server::server_bufferbuilder::BufferRepresentation;
 use colabrodo_server::server_bufferbuilder::VertexFull;
 use colabrodo_server::server_bufferbuilder::VertexSource;
+use colabrodo_server::server_http::create_asset_id;
+use colabrodo_server::server_http::Asset;
+use colabrodo_server::server_http::AssetServerLink;
 use colabrodo_server::server_messages::*;
 use colabrodo_server::server_state::*;
 use russimp::material::PropertyTypeInfo;
@@ -21,39 +27,20 @@ use russimp::scene::Scene;
 
 use crate::object::Object;
 use crate::object::ObjectRoot;
-use crate::platter_state::PlatterState;
-
-const MK_NAME: &str = "?mat.name";
-
-const MK_DOUBLESIDED: &str = "$mat.twosided";
-
-const MK_COLOR_DIFF: &str = "$clr.diffuse";
-const MK_COLOR_BASE: &str = "$clr.base";
-
-const MK_METALLIC_FACTOR: &str = "$mat.metallicFactor";
-const MK_ROUGHNESS_FACTOR: &str = "$mat.roughnessFactor";
-
-const MK_FILTER_MAG: &str = "$tex.mappingfiltermag";
-const MK_FILTER_MIN: &str = "$tex.mappingfiltermin";
-
-const MK_WRAP_U: &str = "$tex.mapmodeu";
-const MK_WRAP_V: &str = "$tex.mapmodev";
 
 // Eventually we can do this
 //const M_SAMPLER_FILTER_NEAREST: f32 = f32::from_le_bytes(9728_i32.to_le_bytes());
 
-#[derive(Debug)]
-pub enum ImportError {
-    UnableToOpenFile(String),
-    UnableToImport(String),
-}
-
 pub struct ImportedScene {
     data: Scene,
+    link: Arc<Mutex<AssetServerLink>>,
 }
 
 impl ImportedScene {
-    pub fn import_file(path: &Path) -> Result<Self, ImportError> {
+    pub fn import_file(
+        path: &Path,
+        link: Arc<Mutex<AssetServerLink>>,
+    ) -> Result<Self, ImportError> {
         if !path.try_exists().unwrap_or(false) {
             return Err(ImportError::UnableToOpenFile(
                 "File does not exist.".to_string(),
@@ -78,14 +65,19 @@ impl ImportedScene {
 
         match scene {
             Err(x) => Err(ImportError::UnableToImport(x.to_string())),
-            Ok(x) => Ok(Self { data: x }),
+            Ok(x) => Ok(Self { data: x, link }),
         }
     }
 
-    pub fn build_objects(&self, state: &mut PlatterState) -> ObjectRoot {
-        let scratch = ImportScratch::default();
+    pub async fn build_objects(
+        &self,
+        max_buffer_size: u64,
+        link: Arc<Mutex<AssetServerLink>>,
+        state: ServerStatePtr,
+    ) -> ObjectRoot {
+        let scratch = ImportScratch::new(link, state, max_buffer_size);
 
-        scratch.build(&self.data, state)
+        scratch.build(&self.data).await
     }
 }
 
@@ -106,22 +98,35 @@ impl PartialEq for AssimpTexture {
 
 impl Eq for AssimpTexture {}
 
-#[derive(Default)]
 struct ImportScratch {
+    link: Arc<Mutex<AssetServerLink>>,
+    state: ServerStatePtr,
+    max_mesh_size: u64,
     published: Vec<uuid::Uuid>,
-    images: HashMap<AssimpTexture, ComponentReference<ServerImageState>>,
-    materials: Vec<ComponentReference<ServerMaterialState>>,
-    meshes: Vec<ComponentReference<ServerGeometryState>>,
+    images: HashMap<AssimpTexture, ImageReference>,
+    materials: Vec<MaterialReference>,
+    meshes: Vec<GeometryReference>,
 
     nodes: Option<Object>,
 }
 
 impl ImportScratch {
+    fn new(link: Arc<Mutex<AssetServerLink>>, state: ServerStatePtr, max_mesh_size: u64) -> Self {
+        Self {
+            link,
+            state,
+            max_mesh_size,
+            published: Default::default(),
+            images: Default::default(),
+            materials: Default::default(),
+            meshes: Default::default(),
+            nodes: Default::default(),
+        }
+    }
     fn recurse_node(
         &mut self,
-        parent: Option<&ComponentReference<ServerEntityState>>,
+        parent: Option<&EntityReference>,
         node: &Rc<RefCell<russimp::node::Node>>,
-        state: &mut ServerState,
     ) -> Object {
         let n = node.borrow();
 
@@ -136,7 +141,7 @@ impl ImportScratch {
             ent.mutable.parent = Some(x.clone());
         }
 
-        let root = state.entities.new_component(ent);
+        let root = self.state.lock().unwrap().entities.new_component(ent);
 
         let mut ret = Object {
             parts: vec![root.clone()],
@@ -156,22 +161,19 @@ impl ImportScratch {
                 },
             ));
 
-            ret.parts.push(state.entities.new_component(sub_ent));
+            ret.parts
+                .push(self.state.lock().unwrap().entities.new_component(sub_ent));
         }
 
         for child in &n.children {
-            let child_obj = self.recurse_node(Some(&root), child, state);
+            let child_obj = self.recurse_node(Some(&root), child);
             ret.children.push(child_obj);
         }
 
         ret
     }
 
-    fn fetch_or_build_image(
-        &mut self,
-        tex_ref: &AssimpTexture,
-        state: &mut ServerState,
-    ) -> Option<ComponentReference<ServerImageState>> {
+    fn fetch_or_build_image(&mut self, tex_ref: &AssimpTexture) -> Option<ImageReference> {
         if let Some(ret) = self.images.get(tex_ref) {
             return Some(ret.clone());
         }
@@ -189,15 +191,16 @@ impl ImportScratch {
                 None
             }
             russimp::material::DataContent::Bytes(bytes) => {
-                let buff = state
+                let mut lock = self.state.lock().unwrap();
+                let buff = lock
                     .buffers
                     .new_component(BufferState::new_from_bytes(bytes.clone()));
 
-                let buffview = state
+                let buffview = lock
                     .buffer_views
                     .new_component(BufferViewState::new_from_whole_buffer(buff));
 
-                let image = state
+                let image = lock
                     .images
                     .new_component(ServerImageState::new_from_buffer(buffview));
 
@@ -212,12 +215,11 @@ impl ImportScratch {
         &mut self,
         props: Option<&MatPropSlot>,
         tex: Option<&Rc<RefCell<Texture>>>,
-        state: &mut ServerState,
     ) -> Option<ServerTextureRef> {
         let props = props?;
         let tex = tex?;
 
-        let image = self.fetch_or_build_image(&AssimpTexture(tex.clone()), state)?;
+        let image = self.fetch_or_build_image(&AssimpTexture(tex.clone()))?;
 
         let mut texture = ServerTextureState {
             name: None,
@@ -268,30 +270,34 @@ impl ImportScratch {
             log::debug!("Found texture sampler filters: {min:?} {mag:?}");
 
             texture.sampler = Some(
-                state.samplers.new_component(SamplerState {
-                    mag_filter: mag,
-                    min_filter: min,
-                    wrap_s: props
-                        .find_float(MK_WRAP_U)
-                        .map(compute_sampler_hack)
-                        .map(compute_wrap),
-                    wrap_t: props
-                        .find_float(MK_WRAP_V)
-                        .map(compute_sampler_hack)
-                        .map(compute_wrap),
-                    ..Default::default()
-                }),
+                self.state
+                    .lock()
+                    .unwrap()
+                    .samplers
+                    .new_component(SamplerState {
+                        mag_filter: mag,
+                        min_filter: min,
+                        wrap_s: props
+                            .find_float(MK_WRAP_U)
+                            .map(compute_sampler_hack)
+                            .map(compute_wrap),
+                        wrap_t: props
+                            .find_float(MK_WRAP_V)
+                            .map(compute_sampler_hack)
+                            .map(compute_wrap),
+                        ..Default::default()
+                    }),
             );
         }
 
         Some(ServerTextureRef {
-            texture: state.textures.new_component(texture),
+            texture: self.state.lock().unwrap().textures.new_component(texture),
             transform: None,
             texture_coord_slot: None,
         })
     }
 
-    fn build_material(&mut self, mat: &russimp::material::Material, state: &mut ServerState) {
+    fn build_material(&mut self, mat: &russimp::material::Material) {
         let props = MatProps::new(mat);
 
         // finding the shading model is difficult. For now we just find the keys that make sense for us.
@@ -327,7 +333,7 @@ impl ImportScratch {
                 .by_type(TextureType::BaseColor)
                 .or(props.by_type(TextureType::Diffuse));
 
-            pbr.base_color_texture = self.build_texture(base_tex_props, base_tex, state);
+            pbr.base_color_texture = self.build_texture(base_tex_props, base_tex);
         }
 
         // =========
@@ -344,10 +350,11 @@ impl ImportScratch {
             },
         };
 
-        self.materials.push(state.materials.new_component(new_mat));
+        self.materials
+            .push(self.state.lock().unwrap().materials.new_component(new_mat));
     }
 
-    fn build_mesh(&mut self, mesh: &russimp::mesh::Mesh, state: &mut PlatterState) {
+    async fn build_mesh(&mut self, mesh: &russimp::mesh::Mesh) {
         let mut verts = Vec::<server_bufferbuilder::VertexFull>::new();
 
         let def_vert = VertexFull {
@@ -409,51 +416,60 @@ impl ImportScratch {
             index: server_bufferbuilder::IndexType::Triangles(new_faces.as_slice()),
         };
 
-        let (packed_mesh_info, pub_id) = state.generate_mesh(source);
+        let pack = source.pack_bytes().unwrap();
 
-        if let Some(pub_id) = pub_id {
-            self.published.push(pub_id);
-        }
-
-        let patch = ServerGeometryPatch {
-            attributes: packed_mesh_info.attributes,
-            vertex_count: packed_mesh_info.vertex_count,
-            indices: packed_mesh_info.indices,
-            patch_type: packed_mesh_info.patch_type,
-            material: mat,
+        let (buffrep, opt_source) = if self.max_mesh_size < (pack.bytes.len() as u64) {
+            let link = publish_mesh(pack.bytes, self.link.clone()).await;
+            (BufferRepresentation::Url(link.1), Some(link.0))
+        } else {
+            (BufferRepresentation::Bytes(pack.bytes), None)
         };
 
-        log::debug!("Made patch: {patch:?}");
+        {
+            let mut server_state = self.state.lock().unwrap();
 
-        self.meshes.push(
-            state
-                .mut_state()
-                .geometries
-                .new_component(ServerGeometryState {
+            let intermediate = source.build_states(&mut server_state, buffrep).unwrap();
+
+            let patch = ServerGeometryPatch {
+                attributes: intermediate.attributes,
+                vertex_count: intermediate.vertex_count,
+                indices: intermediate.indices,
+                patch_type: intermediate.patch_type,
+                material: mat,
+            };
+
+            log::debug!("Made patch: {patch:?}");
+
+            self.meshes
+                .push(server_state.geometries.new_component(ServerGeometryState {
                     name: None,
                     patches: vec![patch],
-                }),
-        );
+                }));
+        }
+
+        if let Some(pub_id) = opt_source {
+            self.published.push(pub_id);
+        }
     }
 
-    fn build_materials(&mut self, scene: &Scene, state: &mut ServerState) {
+    fn build_materials(&mut self, scene: &Scene) {
         for scene_mat in &scene.materials {
-            self.build_material(scene_mat, state);
+            self.build_material(scene_mat);
         }
     }
 
-    fn build_meshes(&mut self, scene: &Scene, state: &mut PlatterState) {
+    async fn build_meshes(&mut self, scene: &Scene) {
         for scene_mesh in &scene.meshes {
-            self.build_mesh(scene_mesh, state);
+            self.build_mesh(scene_mesh).await;
         }
     }
 
-    pub fn build(mut self, scene: &Scene, state: &mut PlatterState) -> ObjectRoot {
+    pub async fn build(mut self, scene: &Scene) -> ObjectRoot {
         // we need to do materials first, as they will be referenced by meshes
-        self.build_materials(scene, &mut state.mut_state());
-        self.build_meshes(scene, state);
+        self.build_materials(scene);
+        self.build_meshes(scene).await;
 
-        self.nodes = Some(self.recurse_node(None, scene.root.as_ref().unwrap(), state.mut_state()));
+        self.nodes = Some(self.recurse_node(None, scene.root.as_ref().unwrap()));
 
         ObjectRoot {
             published: self.published,
@@ -541,46 +557,17 @@ impl MatPropSlot {
     }
 }
 
-#[inline]
-fn normalize_to_u8(v: f32) -> u8 {
-    (v * (u8::MAX as f32)) as u8
-}
+pub async fn publish_mesh(
+    bytes: Vec<u8>,
+    link: Arc<Mutex<AssetServerLink>>,
+) -> (uuid::Uuid, String) {
+    let a_id = create_asset_id();
 
-#[inline]
-fn normalize_to_u16(v: f32) -> u16 {
-    (v * (u16::MAX as f32)) as u16
-}
+    let link = link
+        .lock()
+        .unwrap()
+        .add_asset(a_id, Asset::new_from_slice(bytes.as_slice()))
+        .await;
 
-fn mod_fill<T, F>(from: &[T], to: &mut [VertexFull], f: F)
-where
-    F: Fn(&T, &mut VertexFull),
-{
-    for (a, b) in from.iter().zip(to.iter_mut()) {
-        f(a, b);
-    }
-}
-
-#[inline]
-fn convert_tex(v: russimp::Vector3D) -> [u16; 2] {
-    [normalize_to_u16(v.x), normalize_to_u16(v.y)]
-}
-
-#[inline]
-fn convert_color(v: russimp::Color4D) -> [u8; 4] {
-    [
-        normalize_to_u8(v.r),
-        normalize_to_u8(v.g),
-        normalize_to_u8(v.b),
-        normalize_to_u8(v.a),
-    ]
-}
-
-#[inline]
-fn fill_array<T, const N: usize>(src: &Vec<T>, dst: &mut [T; N])
-where
-    T: Copy,
-{
-    for (d, s) in dst.iter_mut().zip(src) {
-        *d = *s;
-    }
+    (a_id, link)
 }

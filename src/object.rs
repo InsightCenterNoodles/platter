@@ -1,7 +1,6 @@
-use colabrodo_server::{
-    server_http::AssetServerLink,
-    server_messages::{ComponentReference, ServerEntityState},
-};
+use std::sync::Arc;
+
+use colabrodo_server::{server::tokio, server_http::AssetServerLink, server_messages::*};
 
 pub struct ObjectRoot {
     pub published: Vec<uuid::Uuid>,
@@ -9,14 +8,15 @@ pub struct ObjectRoot {
 }
 
 pub struct Object {
-    pub parts: Vec<ComponentReference<ServerEntityState>>,
+    pub parts: Vec<EntityReference>,
     pub children: Vec<Object>,
 }
 
 impl ObjectRoot {
-    pub fn prepare_remove(&self, link: &mut AssetServerLink) {
+    pub async fn prepare_remove(&self, link: Arc<tokio::sync::Mutex<AssetServerLink>>) {
+        let mut lock = link.lock().await;
         for id in &self.published {
-            link.remove_asset(*id);
+            lock.remove_asset(*id).await;
         }
     }
 }

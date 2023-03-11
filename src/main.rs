@@ -1,13 +1,28 @@
 mod arguments;
 mod dir_watcher;
-mod import;
+mod intermediate_to_noodles;
 mod object;
 mod platter_state;
+mod scene_import;
 
-use colabrodo_server::server::{server_main_with_command_queue, tokio, ServerOptions};
+use colabrodo_server::server::{server_main, tokio, ServerOptions};
 use colabrodo_server::server_http::*;
+use colabrodo_server::server_state::ServerState;
 use log::{self, info};
+use platter_state::PlatterState;
+use platter_state::PlatterStatePtr;
+use platter_state::{handle_command, PlatterCommand};
 use std::env;
+use std::sync::Arc;
+
+async fn command_handler(
+    ps: PlatterStatePtr,
+    mut command_stream: tokio::sync::mpsc::Receiver<PlatterCommand>,
+) {
+    while let Some(msg) = command_stream.recv().await {
+        handle_command(ps.clone(), msg).await;
+    }
+}
 
 #[tokio::main]
 async fn main() {
@@ -39,8 +54,9 @@ async fn main() {
     let (watcher_tx, mut watcher_rx) = tokio::sync::mpsc::channel(16);
 
     let init = platter_state::PlaygroundInit {
+        command_stream: command_tx.clone(),
         watcher_command_stream: watcher_tx,
-        link,
+        link: Arc::new(tokio::sync::Mutex::new(link)),
         size_large_limit: args.size_large_limit,
     };
 
@@ -88,9 +104,14 @@ async fn main() {
         arguments::Source::Websocket { port: _ } => todo!(),
     }
 
+    let server_state = ServerState::new();
+
+    let platter_state = PlatterState::new(server_state.clone(), init);
+
+    tokio::spawn(command_handler(platter_state, command_rx));
+
     info!("Starting up.");
 
     // Launch the main noodles task and wait for it to complete
-    server_main_with_command_queue::<platter_state::PlatterState>(opts, init, Some(command_rx))
-        .await;
+    server_main(opts, server_state).await;
 }
