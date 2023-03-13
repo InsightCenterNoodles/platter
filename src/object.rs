@@ -1,6 +1,4 @@
-use std::sync::Arc;
-
-use colabrodo_server::{server::tokio, server_http::AssetServerLink, server_messages::*};
+use colabrodo_server::{server_http::*, server_messages::*};
 
 pub struct ObjectRoot {
     pub published: Vec<uuid::Uuid>,
@@ -13,10 +11,9 @@ pub struct Object {
 }
 
 impl ObjectRoot {
-    pub async fn prepare_remove(&self, link: Arc<tokio::sync::Mutex<AssetServerLink>>) {
-        let mut lock = link.lock().await;
+    pub fn prepare_remove(&self, link: AssetStorePtr) {
         for id in &self.published {
-            lock.remove_asset(*id).await;
+            remove_asset(link.clone(), *id);
         }
     }
 }

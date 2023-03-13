@@ -1,70 +1,16 @@
 use colabrodo_common::{common::strings::TAG_USER_HIDDEN, components::ImageSource};
-use colabrodo_server::server::tokio;
 use colabrodo_server::{
     server_bufferbuilder::*,
-    server_http::{create_asset_id, Asset, AssetServerLink},
+    server_http::*,
     server_messages::*,
     server_state::{ServerState, ServerStatePtr},
 };
-use std::sync::Arc;
 
 use crate::{object::*, scene_import::*};
 
-pub struct ReadyBuffer {
-    url: String,
-    id: uuid::Uuid,
-}
-
-pub async fn convert_images(
-    images: &Vec<IntermediateImage>,
-    link: Arc<tokio::sync::Mutex<AssetServerLink>>,
-) -> Vec<ReadyBuffer> {
-    let mut result = Vec::new();
-    for img in images {
-        let id = create_asset_id();
-        let res = link
-            .lock()
-            .await
-            .add_asset(id, Asset::new_from_slice(img.bytes.as_slice()))
-            .await;
-        result.push(ReadyBuffer { url: res, id });
-    }
-    result
-}
-
-pub async fn convert_meshes(
-    meshes: &Vec<IntermediateMesh>,
-    link: Arc<tokio::sync::Mutex<AssetServerLink>>,
-) -> Vec<ReadyBuffer> {
-    let mut result = Vec::new();
-    for mesh in meshes {
-        let pack = {
-            let source = VertexSource {
-                name: None,
-                vertex: mesh.verts.as_slice(),
-                index: colabrodo_server::server_bufferbuilder::IndexType::Triangles(
-                    mesh.indices.as_slice(),
-                ),
-            };
-            source.pack_bytes()
-        }
-        .unwrap();
-
-        let id = create_asset_id();
-        let res = {
-            link.lock()
-                .await
-                .add_asset(id, Asset::new_from_slice(pack.bytes.as_slice()))
-        }
-        .await;
-        result.push(ReadyBuffer { url: res, id });
-    }
-    result
-}
-
 struct IntermediateConverter<'a> {
-    images: Vec<ReadyBuffer>,
-    meshes: Vec<ReadyBuffer>,
+    assets: Vec<uuid::Uuid>,
+    asset_store: AssetStorePtr,
 
     scene_images: Vec<ImageReference>,
     scene_sampler: Vec<SamplerReference>,
@@ -123,11 +69,20 @@ impl<'a> IntermediateConverter<'a> {
     }
 
     fn start(&mut self) -> ObjectRoot {
-        for img in &self.images {
+        for img in &self.scene.images {
+            let id = create_asset_id();
+            self.assets.push(id);
+
+            let res = add_asset(
+                self.asset_store.clone(),
+                id,
+                Asset::new_from_slice(img.bytes.as_slice()),
+            );
+
             self.scene_images
                 .push(self.state.images.new_component(ServerImageState {
                     name: None,
-                    source: ImageSource::new_uri(img.url.parse().unwrap()),
+                    source: ImageSource::new_uri(res.parse().unwrap()),
                 }));
         }
 
@@ -143,6 +98,7 @@ impl<'a> IntermediateConverter<'a> {
         }
 
         for tex in &self.scene.textures {
+            log::debug!("Convert: {tex:?}");
             self.scene_textures.push(
                 self.state.textures.new_component(ServerTextureState {
                     name: None,
@@ -161,6 +117,8 @@ impl<'a> IntermediateConverter<'a> {
                 texture_coord_slot: None,
             });
 
+            log::debug!("Convert: {mat:?} {tex:?}");
+
             self.scene_materials
                 .push(self.state.materials.new_component(ServerMaterialState {
                     name: mat.name.clone(),
@@ -178,15 +136,26 @@ impl<'a> IntermediateConverter<'a> {
                 }))
         }
 
-        for (reg_mesh, mesh) in self.meshes.iter().zip(self.scene.meshes.iter()) {
+        for mesh in &self.scene.meshes {
             let source = VertexSource {
                 name: None,
                 vertex: &mesh.verts,
                 index: IndexType::Triangles(&mesh.indices),
             };
 
+            let pack = source.pack_bytes().unwrap();
+
+            let id = create_asset_id();
+            self.assets.push(id);
+
+            let res = add_asset(
+                self.asset_store.clone(),
+                id,
+                Asset::new_from_slice(pack.bytes.as_slice()),
+            );
+
             let partial = source
-                .build_states(self.state, BufferRepresentation::Url(reg_mesh.url.clone()))
+                .build_states(self.state, BufferRepresentation::Url(res))
                 .unwrap();
 
             self.scene_meshes
@@ -205,28 +174,22 @@ impl<'a> IntermediateConverter<'a> {
         let node = self.scene.nodes.take().unwrap();
 
         ObjectRoot {
-            published: self
-                .images
-                .iter()
-                .map(|f| f.id)
-                .chain(self.meshes.iter().map(|f| f.id))
-                .collect(),
+            published: Default::default(),
             root: self.recurse_intermediate(&node, None),
         }
     }
 }
 
 pub fn convert_intermediate(
-    images: Vec<ReadyBuffer>,
-    meshes: Vec<ReadyBuffer>,
     scene: IntermediateScene,
     state: ServerStatePtr,
+    asset_store: AssetStorePtr,
 ) -> ObjectRoot {
     let mut lock = state.lock().unwrap();
 
     let mut c = IntermediateConverter {
-        images,
-        meshes,
+        assets: Vec::new(),
+        asset_store,
         scene_images: Vec::new(),
         scene_sampler: Vec::new(),
         scene_textures: Vec::new(),
@@ -236,5 +199,9 @@ pub fn convert_intermediate(
         state: &mut lock,
     };
 
-    c.start()
+    let mut root = c.start();
+
+    root.published = c.assets;
+
+    root
 }

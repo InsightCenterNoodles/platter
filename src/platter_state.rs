@@ -15,7 +15,7 @@ use std::{collections::HashMap, path::Path};
 pub struct PlaygroundInit {
     pub command_stream: tokio::sync::mpsc::Sender<PlatterCommand>,
     pub watcher_command_stream: tokio::sync::mpsc::Sender<(Directory, uuid::Uuid)>,
-    pub link: Arc<tokio::sync::Mutex<AssetServerLink>>,
+    pub link: AssetStorePtr,
     pub size_large_limit: u64,
 }
 
@@ -78,21 +78,9 @@ impl PlatterState {
             }
         };
 
-        let meshes = convert_meshes(&res.meshes, self.init.link.clone()).await;
-        let images = convert_images(&res.images, self.init.link.clone()).await;
+        let root = convert_intermediate(res, self.state.clone(), self.init.link.clone());
 
-        let root = convert_intermediate(images, meshes, res, self.state.clone());
-
-        self.import_object(root, source).await;
-
-        // move into binding
-        // let limit = self.init.size_large_limit;
-        // let link = self.init.link.clone();
-        // let st = self.state.clone();
-        // {
-        //     let o = x.build_objects(limit, link, st).await;
-        //     self.import_object(o, source).await;
-        // }
+        self.import_object(root, source);
     }
 
     async fn import_dir(&mut self, p: &Path, source: Option<uuid::Uuid>) {
@@ -108,7 +96,7 @@ impl PlatterState {
         self.items.clear();
     }
 
-    async fn import_object(&mut self, o: ObjectRoot, source: Option<uuid::Uuid>) -> u32 {
+    fn import_object(&mut self, o: ObjectRoot, source: Option<uuid::Uuid>) -> u32 {
         let id = self.get_next_id();
 
         self.items.insert(id, o);
@@ -116,7 +104,7 @@ impl PlatterState {
         if let Some(sid) = source {
             // check if we have some exclusion
             if self.source_exclusive.contains(&sid) {
-                self.clear_source(sid).await;
+                self.clear_source(sid);
             }
 
             if let Some(list) = self.source_map.get_mut(&sid) {
@@ -127,12 +115,12 @@ impl PlatterState {
         id
     }
 
-    async fn clear_source(&mut self, source: uuid::Uuid) -> Option<()> {
+    fn clear_source(&mut self, source: uuid::Uuid) -> Option<()> {
         let list = self.source_map.remove(&source)?;
 
         for item in list.iter() {
             if let Some(obj) = self.items.get(item) {
-                obj.prepare_remove(self.init.link.clone()).await;
+                obj.prepare_remove(self.init.link.clone());
             }
             self.items.remove(item);
         }

@@ -13,7 +13,6 @@ use platter_state::PlatterState;
 use platter_state::PlatterStatePtr;
 use platter_state::{handle_command, PlatterCommand};
 use std::env;
-use std::sync::Arc;
 
 async fn command_handler(
     ps: PlatterStatePtr,
@@ -39,13 +38,7 @@ async fn main() {
     };
 
     // Prep asset server
-    let (asset_server, mut link) = make_asset_server(AssetServerOptions::default());
-
-    // Launch it
-    tokio::spawn(asset_server);
-
-    // Wait for it to start
-    link.wait_for_start().await;
+    let asset_server = make_asset_server(AssetServerOptions::default());
 
     // Prep command streams
     let (command_tx, command_rx) = tokio::sync::mpsc::channel(16);
@@ -56,7 +49,7 @@ async fn main() {
     let init = platter_state::PlaygroundInit {
         command_stream: command_tx.clone(),
         watcher_command_stream: watcher_tx,
-        link: Arc::new(tokio::sync::Mutex::new(link)),
+        link: asset_server.clone(),
         size_large_limit: args.size_large_limit,
     };
 

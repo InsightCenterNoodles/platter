@@ -1,12 +1,12 @@
 [package]
 name = "platter"
-version = "0.1.0"
+version = "0.2.0"
 edition = "2021"
 
 [dependencies]
 clap = { version = "4.1", features = ["derive"] }
-colabrodo_server = { git = 'https://github.com/InsightCenterNoodles/colabrodo', rev = "2823d49862d06311456fe2d4c193957b76ed8e4b" }
-colabrodo_common = { git = 'https://github.com/InsightCenterNoodles/colabrodo', rev = "2823d49862d06311456fe2d4c193957b76ed8e4b" }
+colabrodo_server = { git = 'https://github.com/InsightCenterNoodles/colabrodo', tag = "v0.4.0" }
+colabrodo_common = { git = 'https://github.com/InsightCenterNoodles/colabrodo', tag = "v0.4.0" }
 env_logger = "0.10.0"
 log = "0.4"
 notify = { version = "5.1", default-features = false, features = ["macos_kqueue"] }

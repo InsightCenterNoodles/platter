@@ -90,7 +90,7 @@ pub struct IntermediateTexture {
     pub sampler: Option<u32>,
 }
 
-#[derive(Default)]
+#[derive(Debug, Default)]
 pub struct IntermediateMat {
     pub name: Option<String>,
     pub base_color: [f32; 4],
@@ -130,30 +130,29 @@ pub struct IntermediateScene {
     pub nodes: Option<IntermediateNode>,
 }
 
-impl IntermediateScene {
-    fn recurse_node(&mut self, node: &Rc<RefCell<russimp::node::Node>>) -> IntermediateNode {
-        let n = node.borrow_mut();
+fn recurse_node(node: &Rc<RefCell<russimp::node::Node>>) -> IntermediateNode {
+    let n = node.borrow_mut();
 
-        log::debug!("Importing node: {}", n.name);
+    log::debug!("Importing node: {}", n.name);
 
-        let mut ret = IntermediateNode {
-            name: n.name.clone(),
-            meshes: n.meshes.clone(),
-            children: Vec::new(),
-        };
+    let mut ret = IntermediateNode {
+        name: n.name.clone(),
+        meshes: n.meshes.clone(),
+        children: Vec::new(),
+    };
 
-        for child in &n.children {
-            let child_obj = self.recurse_node(child);
-            ret.children.push(child_obj);
-        }
-
-        ret
+    for child in &n.children {
+        let child_obj = recurse_node(child);
+        ret.children.push(child_obj);
     }
 
+    ret
+}
+
+impl IntermediateScene {
     fn build_image(&mut self, tex: Option<&Rc<RefCell<Texture>>>) -> Option<u32> {
-        if tex.is_none() {
-            return None;
-        }
+        tex?;
+        log::debug!("New ASSIMP image");
 
         let tex = tex.unwrap().borrow();
 
@@ -180,6 +179,7 @@ impl IntermediateScene {
 
     fn build_sampler(&mut self, props: Option<&MatPropSlot>) -> Option<u32> {
         let props = props?;
+        log::debug!("New ASSIMP sampler");
 
         // WARNING we need to use a hack here. The library is not providing the values as ints, just as ints -> floats.
         fn compute_sampler_hack(v: f32) -> u32 {
@@ -253,13 +253,16 @@ impl IntermediateScene {
             sampler: self.build_sampler(props),
         };
 
+        log::debug!("New ASSIMP texture");
+
         self.textures.push(texture);
 
         Some(id)
     }
 
     fn build_material(&mut self, mat: &russimp::material::Material) {
-        let props = MatProps::new(&mat);
+        log::debug!("New ASSIMP material");
+        let props = MatProps::new(mat);
 
         // finding the shading model is difficult. For now we just find the keys that make sense for us.
 
@@ -305,6 +308,7 @@ impl IntermediateScene {
     }
 
     fn consume_mesh(&mut self, mesh: &russimp::mesh::Mesh) {
+        log::debug!("New ASSIMP mesh");
         let mut verts = Vec::<server_bufferbuilder::VertexFull>::new();
 
         let def_vert = server_bufferbuilder::VertexFull {
@@ -356,6 +360,7 @@ impl IntermediateScene {
 
             new_faces.push(nf);
         }
+        log::debug!("Mesh: Material {}", mesh.material_index);
 
         self.meshes.push(IntermediateMesh {
             material: mesh.material_index,
@@ -365,11 +370,13 @@ impl IntermediateScene {
     }
 
     fn consume_materials(&mut self, scene: &Scene) {
+        log::debug!("Total materials: {}", scene.materials.len());
         for mat in &scene.materials {
             self.build_material(mat);
         }
     }
     fn consume_meshs(&mut self, scene: &mut Scene) {
+        log::debug!("Total meshes: {}", scene.meshes.len());
         for mesh in &scene.meshes {
             self.consume_mesh(mesh);
         }
@@ -379,7 +386,7 @@ impl IntermediateScene {
         self.consume_materials(&scene);
         self.consume_meshs(&mut scene);
 
-        self.nodes = Some(self.recurse_node(scene.root.as_ref().unwrap()));
+        self.nodes = Some(recurse_node(scene.root.as_ref().unwrap()));
     }
 }
 
@@ -502,7 +509,7 @@ impl MatPropSlot {
         match v {
             PropertyTypeInfo::FloatArray(x) => {
                 let mut ret: [f32; 4] = [1.0, 1.0, 1.0, 1.0];
-                fill_array(&x, &mut ret);
+                fill_array(x, &mut ret);
                 Some(ret)
             }
             _ => None,
