@@ -68,7 +68,7 @@ impl<'a> IntermediateConverter<'a> {
         ret
     }
 
-    fn start(&mut self) -> ObjectRoot {
+    fn start(&mut self) -> Object {
         for img in &self.scene.images {
             let id = create_asset_id();
             self.assets.push(id);
@@ -173,10 +173,7 @@ impl<'a> IntermediateConverter<'a> {
 
         let node = self.scene.nodes.take().unwrap();
 
-        ObjectRoot {
-            published: Default::default(),
-            root: self.recurse_intermediate(&node, None),
-        }
+        self.recurse_intermediate(&node, None)
     }
 }
 
@@ -189,7 +186,7 @@ pub fn convert_intermediate(
 
     let mut c = IntermediateConverter {
         assets: Vec::new(),
-        asset_store,
+        asset_store: asset_store.clone(),
         scene_images: Vec::new(),
         scene_sampler: Vec::new(),
         scene_textures: Vec::new(),
@@ -199,9 +196,7 @@ pub fn convert_intermediate(
         state: &mut lock,
     };
 
-    let mut root = c.start();
+    let root = c.start();
 
-    root.published = c.assets;
-
-    root
+    ObjectRoot::new(root, c.assets, asset_store)
 }

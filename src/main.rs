@@ -1,6 +1,7 @@
 mod arguments;
 mod dir_watcher;
 mod intermediate_to_noodles;
+mod methods;
 mod object;
 mod platter_state;
 mod scene_import;
@@ -8,7 +9,6 @@ mod scene_import;
 use colabrodo_server::server::{server_main, tokio, ServerOptions};
 use colabrodo_server::server_http::*;
 use colabrodo_server::server_state::ServerState;
-use log::{self, info};
 use platter_state::PlatterState;
 use platter_state::PlatterStatePtr;
 use platter_state::{handle_command, PlatterCommand};
@@ -19,7 +19,7 @@ async fn command_handler(
     mut command_stream: tokio::sync::mpsc::Receiver<PlatterCommand>,
 ) {
     while let Some(msg) = command_stream.recv().await {
-        handle_command(ps.clone(), msg).await;
+        handle_command(ps.clone(), msg);
     }
 }
 
@@ -46,7 +46,7 @@ async fn main() {
     // Prep streams for the watcher controller
     let (watcher_tx, mut watcher_rx) = tokio::sync::mpsc::channel(16);
 
-    let init = platter_state::PlaygroundInit {
+    let init = platter_state::PlatterInit {
         command_stream: command_tx.clone(),
         watcher_command_stream: watcher_tx,
         link: asset_server.clone(),
@@ -103,7 +103,7 @@ async fn main() {
 
     tokio::spawn(command_handler(platter_state, command_rx));
 
-    info!("Starting up.");
+    log::info!("Starting up.");
 
     // Launch the main noodles task and wait for it to complete
     server_main(opts, server_state).await;

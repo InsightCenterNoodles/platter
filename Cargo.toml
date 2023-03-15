@@ -5,12 +5,15 @@ edition = "2021"
 
 [dependencies]
 clap = { version = "4.1", features = ["derive"] }
-colabrodo_server = { git = 'https://github.com/InsightCenterNoodles/colabrodo', tag = "v0.4.0" }
-colabrodo_common = { git = 'https://github.com/InsightCenterNoodles/colabrodo', tag = "v0.4.0" }
+colabrodo_server = { git = 'https://github.com/InsightCenterNoodles/colabrodo', rev = "328424cde302d336f7ef5de9e06ef3c7fb072196" }
+colabrodo_common = { git = 'https://github.com/InsightCenterNoodles/colabrodo', rev = "328424cde302d336f7ef5de9e06ef3c7fb072196" }
 env_logger = "0.10.0"
 log = "0.4"
 notify = { version = "5.1", default-features = false, features = ["macos_kqueue"] }
 russimp = { version = "2.0", features = ["static-link"] }
+nalgebra-glm = "0.18"
+closure = "0.3"
+num-traits = "0.2.15"
 
 [dependencies.uuid]
 version = "1.3"
