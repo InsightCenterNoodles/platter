@@ -20,13 +20,11 @@ fn get_entity(
     context: Option<InvokeIDType>,
     state: &ServerState,
 ) -> Result<EntityReference, MethodException> {
-    if let Some(c) = context {
-        if let InvokeIDType::Entity(id) = c {
-            return state
-                .entities
-                .resolve(id)
-                .ok_or_else(|| MethodException::method_not_found(None));
-        }
+    if let Some(InvokeIDType::Entity(id)) = context {
+        return state
+            .entities
+            .resolve(id)
+            .ok_or_else(|| MethodException::method_not_found(None));
     }
     Err(MethodException::method_not_found(None))
 }
@@ -111,22 +109,14 @@ make_method_function!(set_scale,
 pub fn setup_methods(state: ServerStatePtr, app_state: PlatterStatePtr) -> Vec<MethodReference> {
     let mut lock = state.lock().unwrap();
 
-    let mut ret = Vec::new();
-
-    ret.push(
+    let ret = vec![
         lock.methods
             .new_owned_component(create_set_position(app_state.clone())),
-    );
-
-    ret.push(
         lock.methods
             .new_owned_component(create_set_rotation(app_state.clone())),
-    );
-
-    ret.push(
         lock.methods
-            .new_owned_component(create_set_scale(app_state.clone())),
-    );
+            .new_owned_component(create_set_scale(app_state)),
+    ];
 
     ret
 }
