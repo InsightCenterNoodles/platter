@@ -4,7 +4,11 @@ mod intermediate_to_noodles;
 mod methods;
 mod object;
 mod platter_state;
-mod scene_import;
+#[cfg(use_assimp)]
+mod assimp_import;
+pub mod intermediate;
+pub mod import;
+pub mod import_gltf;
 
 use colabrodo_server::server::{server_main, tokio, ServerOptions};
 use colabrodo_server::server_http::*;

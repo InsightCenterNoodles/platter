@@ -1,9 +1,14 @@
 use crate::arguments;
 use crate::arguments::Directory;
+use crate::import;
+use crate::import::ImportError;
+use crate::intermediate::IntermediateScene;
 use crate::intermediate_to_noodles::*;
 use crate::methods::setup_methods;
 use crate::object::ObjectRoot;
-use crate::scene_import;
+
+#[cfg(use_assimp)]
+use crate::assimp_import;
 
 use colabrodo_server::server::*;
 use colabrodo_server::server_http::*;
@@ -83,7 +88,7 @@ impl PlatterState {
 
     fn import_file(&mut self, p: &Path, source: Option<uuid::Uuid>) {
         log::info!("Loading file: {}", p.display());
-        let res = match scene_import::import_file(p) {
+        let res = match handle_import(p) {
             Ok(x) => x,
             Err(x) => {
                 log::error!("Error loading file: {x:?}");
@@ -197,4 +202,13 @@ pub fn handle_command(platter_state: PlatterStatePtr, c: PlatterCommand) {
                 .unwrap();
         }
     }
+}
+
+
+fn handle_import(path: &Path) -> Result<IntermediateScene, ImportError> {
+    #[cfg(use_assimp)]
+    return assimp_import::import_file(p);
+
+    #[cfg(not(use_assimp))]
+    return import::import_file(path);
 }
