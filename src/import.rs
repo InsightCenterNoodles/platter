@@ -1,10 +1,13 @@
-use std::{path::Path, fmt::Display};
+use std::{fmt::Display, path::Path};
 
-use crate::intermediate::*;
+use colabrodo_server::{server_http::AssetStorePtr, server_state::ServerStatePtr};
+
+use crate::object::ObjectRoot;
 
 #[derive(Debug)]
 pub enum ImportError {
     UnableToOpenFile(String),
+    UnknownFileFormat(String),
     UnableToImport(String),
 }
 
@@ -14,10 +17,25 @@ impl Display for ImportError {
     }
 }
 
-impl std::error::Error for ImportError {
-    
-}
+impl std::error::Error for ImportError {}
 
-pub fn import_file(path: &Path) -> Result<IntermediateScene, ImportError> {
-    Err(ImportError::UnableToImport("TEST".to_string()))
+pub fn import_file(
+    path: &Path,
+    state: ServerStatePtr,
+    asset_store: AssetStorePtr,
+) -> Result<ObjectRoot, ImportError> {
+    let ext = path.extension().and_then(|f| f.to_str()).ok_or_else(|| {
+        ImportError::UnknownFileFormat(format!(
+            "Unable to determine extension from path: {}",
+            path.display()
+        ))
+    })?;
+
+    match ext {
+        "gltf" | "glb" => crate::import_gltf::import_file(path, state, asset_store),
+        _ => Err(ImportError::UnknownFileFormat(format!(
+            "File {} does not have a known extension",
+            path.display()
+        ))),
+    }
 }
