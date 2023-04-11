@@ -6,7 +6,8 @@ use colabrodo_server::{
     server_state::{ServerState, ServerStatePtr},
 };
 
-use crate::{object::*, scene_import::*};
+use crate::intermediate::*;
+use crate::object::*;
 
 struct IntermediateConverter<'a> {
     assets: Vec<uuid::Uuid>,

@@ -76,6 +76,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "anyhow"
+version = "1.0.70"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7de8ce5e0f9f8d88245311066a578d72b7af3e7088f32783804676302df237e4"
+
+[[package]]
 name = "approx"
 version = "0.5.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -331,7 +337,7 @@ dependencies = [
 [[package]]
 name = "colabrodo_common"
 version = "0.4.0"
-source = "git+https://github.com/InsightCenterNoodles/colabrodo?rev=385fc0bd64a73f9c833b438e1ecc002fb5cd9bd8#385fc0bd64a73f9c833b438e1ecc002fb5cd9bd8"
+source = "git+https://github.com/InsightCenterNoodles/colabrodo?rev=fdee847fabaed64ee7e78718ea02e186377a93a7#fdee847fabaed64ee7e78718ea02e186377a93a7"
 dependencies = [
  "ciborium",
  "ciborium-io",
@@ -348,7 +354,7 @@ dependencies = [
 [[package]]
 name = "colabrodo_macros"
 version = "0.4.0"
-source = "git+https://github.com/InsightCenterNoodles/colabrodo?rev=385fc0bd64a73f9c833b438e1ecc002fb5cd9bd8#385fc0bd64a73f9c833b438e1ecc002fb5cd9bd8"
+source = "git+https://github.com/InsightCenterNoodles/colabrodo?rev=fdee847fabaed64ee7e78718ea02e186377a93a7#fdee847fabaed64ee7e78718ea02e186377a93a7"
 dependencies = [
  "quote",
  "syn 2.0.13",
@@ -357,7 +363,7 @@ dependencies = [
 [[package]]
 name = "colabrodo_server"
 version = "0.4.0"
-source = "git+https://github.com/InsightCenterNoodles/colabrodo?rev=385fc0bd64a73f9c833b438e1ecc002fb5cd9bd8#385fc0bd64a73f9c833b438e1ecc002fb5cd9bd8"
+source = "git+https://github.com/InsightCenterNoodles/colabrodo?rev=fdee847fabaed64ee7e78718ea02e186377a93a7#fdee847fabaed64ee7e78718ea02e186377a93a7"
 dependencies = [
  "bytemuck",
  "ciborium",
@@ -381,6 +387,12 @@ dependencies = [
  "tokio-util",
  "uuid",
 ]
+
+[[package]]
+name = "color_quant"
+version = "1.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "3d7b894f5411737b7867f4827955924d7c254fc9f4d91a6aad6b097804b1018b"
 
 [[package]]
 name = "concolor-override"
@@ -702,6 +714,44 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d2fabcfbdc87f4758337ca535fb41a6d701b65693ce38287d856d1674551ec9b"
 
 [[package]]
+name = "gltf"
+version = "1.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1fd7703af6975def3b32573c60aaa5ebfebfab5d879da1e1315d87155ba57bcd"
+dependencies = [
+ "base64",
+ "byteorder",
+ "gltf-json",
+ "image",
+ "lazy_static",
+ "urlencoding",
+]
+
+[[package]]
+name = "gltf-derive"
+version = "1.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "67b33dbe598480111e3b2e5a1e9a7e52ad5df0f836e04b8c80fc96f52a9c9f2e"
+dependencies = [
+ "inflections",
+ "proc-macro2",
+ "quote",
+ "syn 1.0.109",
+]
+
+[[package]]
+name = "gltf-json"
+version = "1.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5511a759d99beeeef064bd6f81e207c77e3a3431c7499d7590929e35de371f31"
+dependencies = [
+ "gltf-derive",
+ "serde",
+ "serde_derive",
+ "serde_json",
+]
+
+[[package]]
 name = "h2"
 version = "0.3.16"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -873,6 +923,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "image"
+version = "0.24.6"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "527909aa81e20ac3a44803521443a765550f09b5130c2c2fa1ea59c2f8f50a3a"
+dependencies = [
+ "bytemuck",
+ "byteorder",
+ "color_quant",
+ "jpeg-decoder",
+ "num-rational",
+ "num-traits",
+ "png",
+]
+
+[[package]]
 name = "indexmap"
 version = "1.9.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -882,6 +947,12 @@ dependencies = [
  "hashbrown",
  "serde",
 ]
+
+[[package]]
+name = "inflections"
+version = "1.1.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a257582fdcde896fd96463bf2d40eefea0580021c0712a0e2b028b60b47a837a"
 
 [[package]]
 name = "inotify"
@@ -931,6 +1002,12 @@ name = "itoa"
 version = "1.0.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "453ad9f582a441959e5f0d088b02ce04cfe8d51a8eaf077f12ac6d3e94164ca6"
+
+[[package]]
+name = "jpeg-decoder"
+version = "0.3.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "bc0000e42512c92e31c2252315bda326620a4e034105e900c98ec492fa077b3e"
 
 [[package]]
 name = "js-sys"
@@ -1284,17 +1361,30 @@ checksum = "8b870d8c151b6f2fb93e84a13146138f05d02ed11c7e7c54f8826aaaf7c9f184"
 name = "platter"
 version = "0.2.0"
 dependencies = [
+ "anyhow",
  "clap 4.2.1",
- "closure",
  "colabrodo_common",
  "colabrodo_server",
  "env_logger 0.10.0",
+ "gltf",
  "log",
  "nalgebra-glm",
  "notify",
  "num-traits",
  "russimp",
  "uuid",
+]
+
+[[package]]
+name = "png"
+version = "0.17.7"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5d708eaf860a19b19ce538740d2b4bdeeb8337fa53f7738455e706623ad5c638"
+dependencies = [
+ "bitflags",
+ "crc32fast",
+ "flate2",
+ "miniz_oxide",
 ]
 
 [[package]]
@@ -1986,6 +2076,12 @@ dependencies = [
  "percent-encoding",
  "serde",
 ]
+
+[[package]]
+name = "urlencoding"
+version = "2.1.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e8db7427f936968176eaa7cdf81b7f98b980b18495ec28f1b5791ac3bfe3eea9"
 
 [[package]]
 name = "utf-8"

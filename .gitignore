@@ -13,3 +13,6 @@
 
 # Used for directory watch testing
 test_dir
+
+# Some vscode cruft
+.vscode

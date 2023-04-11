@@ -1,10 +1,13 @@
 mod arguments;
+#[cfg(use_assimp)]
+pub mod assimp_path;
 mod dir_watcher;
-mod intermediate_to_noodles;
+pub mod import;
+pub mod import_gltf;
+pub mod import_obj;
 mod methods;
 mod object;
 mod platter_state;
-mod scene_import;
 
 use colabrodo_server::server::{server_main, tokio, ServerOptions};
 use colabrodo_server::server_http::*;
