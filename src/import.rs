@@ -1,5 +1,7 @@
 use std::{fmt::Display, path::Path};
 
+use anyhow::Result;
+
 use colabrodo_server::{server_http::AssetStorePtr, server_state::ServerStatePtr};
 
 use crate::object::ObjectRoot;
@@ -23,7 +25,7 @@ pub fn import_file(
     path: &Path,
     state: ServerStatePtr,
     asset_store: AssetStorePtr,
-) -> Result<ObjectRoot, ImportError> {
+) -> Result<ObjectRoot> {
     let ext = path.extension().and_then(|f| f.to_str()).ok_or_else(|| {
         ImportError::UnknownFileFormat(format!(
             "Unable to determine extension from path: {}",
@@ -33,9 +35,11 @@ pub fn import_file(
 
     match ext {
         "gltf" | "glb" => crate::import_gltf::import_file(path, state, asset_store),
+        "obj" => crate::import_obj::import_file(path, state, asset_store),
         _ => Err(ImportError::UnknownFileFormat(format!(
             "File {} does not have a known extension",
             path.display()
-        ))),
+        ))
+        .into()),
     }
 }

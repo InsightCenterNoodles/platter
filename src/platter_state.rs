@@ -5,6 +5,8 @@ use crate::import::ImportError;
 use crate::methods::setup_methods;
 use crate::object::ObjectRoot;
 
+use anyhow::Result;
+
 #[cfg(use_assimp)]
 use crate::assimp_import;
 
@@ -204,7 +206,7 @@ fn handle_import(
     path: &Path,
     state: ServerStatePtr,
     asset_store: AssetStorePtr,
-) -> Result<ObjectRoot, ImportError> {
+) -> Result<ObjectRoot> {
     #[cfg(use_assimp)]
     return assimp_import::import_file(p);
 

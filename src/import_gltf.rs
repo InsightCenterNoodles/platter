@@ -1,22 +1,11 @@
 use std::{collections::HashMap, path::Path};
 
-use crate::{
-    import::ImportError,
-    object::{Object, ObjectRoot},
-};
-use colabrodo_common::{components::*, types::Format};
-use colabrodo_server::{
-    server_http::{add_asset, create_asset_id, Asset, AssetStorePtr},
-    server_messages::*,
-    server_state::{ServerState, ServerStatePtr},
-};
-use gltf;
+use anyhow::Result;
 
-impl From<gltf::Error> for ImportError {
-    fn from(value: gltf::Error) -> Self {
-        ImportError::UnableToImport(value.to_string())
-    }
-}
+use crate::object::{Object, ObjectRoot};
+use colabrodo_common::{components::*, types::Format};
+use colabrodo_server::{server_http::*, server_messages::*, server_state::*};
+use gltf;
 
 trait ToNoodles {
     type Value;
@@ -322,7 +311,7 @@ pub fn import_file(
     path: &Path,
     state: ServerStatePtr,
     asset_store: AssetStorePtr,
-) -> Result<ObjectRoot, ImportError> {
+) -> Result<ObjectRoot> {
     let mut lock = state.lock().unwrap();
 
     let mut published = Vec::<uuid::Uuid>::new();
@@ -378,7 +367,7 @@ pub fn import_file(
     let n_images: Vec<_> = gltf
         .images()
         .enumerate()
-        .map(|(i, img)| {
+        .map(|(_i, img)| {
             let new_state = ServerImageState {
                 name: img.name().map(|f| f.to_string()),
                 source: match img.source() {
@@ -483,7 +472,7 @@ pub fn import_file(
                 name: f.name().map(|f| f.to_string()),
                 patches: f
                     .primitives()
-                    .map(|f| {
+                    .filter_map(|f| {
                         let mat = f
                             .material()
                             .index()
@@ -497,8 +486,6 @@ pub fn import_file(
 
                         convert_geom_patch(&n_buffer_views, &f, mat)
                     })
-                    .filter(|f| f.is_some())
-                    .map(|f| f.unwrap())
                     .collect(),
             };
 
