@@ -1,7 +1,6 @@
 use crate::arguments;
 use crate::arguments::Directory;
 use crate::import;
-use crate::import::ImportError;
 use crate::methods::setup_methods;
 use crate::object::ObjectRoot;
 

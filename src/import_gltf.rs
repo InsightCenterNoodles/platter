@@ -7,7 +7,9 @@ use colabrodo_common::{components::*, types::Format};
 use colabrodo_server::{server_http::*, server_messages::*, server_state::*};
 use gltf;
 
+/// Trait to convert GLTF enums and values to corresponding NOODLES values
 trait ToNoodles {
+    /// NOODLES result type of this conversion
     type Value;
     fn into_noodles(self) -> Self::Value;
 }
@@ -74,6 +76,37 @@ impl ToNoodles for gltf::mesh::Mode {
     }
 }
 
+impl<'a> ToNoodles for gltf::accessor::Accessor<'a> {
+    type Value = Option<Format>;
+
+    fn into_noodles(self) -> Self::Value {
+        match (self.data_type(), self.dimensions()) {
+            (gltf::accessor::DataType::U8, gltf::accessor::Dimensions::Scalar) => Some(Format::U8),
+            (gltf::accessor::DataType::U8, gltf::accessor::Dimensions::Vec4) => {
+                Some(Format::U8VEC4)
+            }
+            (gltf::accessor::DataType::U16, gltf::accessor::Dimensions::Scalar) => {
+                Some(Format::U16)
+            }
+            (gltf::accessor::DataType::U16, gltf::accessor::Dimensions::Vec2) => {
+                Some(Format::U16VEC2)
+            }
+            (gltf::accessor::DataType::U32, gltf::accessor::Dimensions::Scalar) => {
+                Some(Format::U32)
+            }
+            (gltf::accessor::DataType::F32, gltf::accessor::Dimensions::Vec2) => Some(Format::VEC2),
+            (gltf::accessor::DataType::F32, gltf::accessor::Dimensions::Vec3) => Some(Format::VEC3),
+            (gltf::accessor::DataType::F32, gltf::accessor::Dimensions::Vec4) => Some(Format::VEC4),
+            (gltf::accessor::DataType::F32, gltf::accessor::Dimensions::Mat3) => Some(Format::MAT3),
+            (gltf::accessor::DataType::F32, gltf::accessor::Dimensions::Mat4) => Some(Format::MAT4),
+            (_, _) => None,
+        }
+    }
+}
+
+// =============================================================================
+
+/// Build a NOODLES texture reference from a list of NOODLES textures from a GLTF 'texture reference'.
 fn fetch_texture_by_info(
     tex_list: &[TextureReference],
     gltf_tex: &gltf::texture::Info,
@@ -85,6 +118,7 @@ fn fetch_texture_by_info(
     }
 }
 
+/// Build a NOODLES texture reference from the GLTF normal texture reference.
 fn fetch_normal_texture(
     tex_list: &[TextureReference],
     gltf_tex: &gltf::material::NormalTexture,
@@ -96,6 +130,7 @@ fn fetch_normal_texture(
     }
 }
 
+/// Build a NOODLES texture reference from a GLTF occlusion texture reference.
 fn fetch_occ_texture(
     tex_list: &[TextureReference],
     gltf_tex: &gltf::material::OcclusionTexture,
@@ -107,6 +142,7 @@ fn fetch_occ_texture(
     }
 }
 
+/// Create a default material if a GLTF material is missing
 fn make_default_material(state: &mut ServerState) -> MaterialReference {
     state.materials.new_component(ServerMaterialState {
         name: Some("Default".into()),
@@ -122,49 +158,38 @@ fn make_default_material(state: &mut ServerState) -> MaterialReference {
     })
 }
 
-fn accessor_format(acc: &gltf::accessor::Accessor) -> Option<Format> {
-    match (acc.data_type(), acc.dimensions()) {
-        (gltf::accessor::DataType::U8, gltf::accessor::Dimensions::Scalar) => Some(Format::U8),
-        (gltf::accessor::DataType::U8, gltf::accessor::Dimensions::Vec4) => Some(Format::U8VEC4),
-        (gltf::accessor::DataType::U16, gltf::accessor::Dimensions::Scalar) => Some(Format::U16),
-        (gltf::accessor::DataType::U16, gltf::accessor::Dimensions::Vec2) => Some(Format::U16VEC2),
-        (gltf::accessor::DataType::U32, gltf::accessor::Dimensions::Scalar) => Some(Format::U32),
-        (gltf::accessor::DataType::F32, gltf::accessor::Dimensions::Vec2) => Some(Format::VEC2),
-        (gltf::accessor::DataType::F32, gltf::accessor::Dimensions::Vec3) => Some(Format::VEC3),
-        (gltf::accessor::DataType::F32, gltf::accessor::Dimensions::Vec4) => Some(Format::VEC4),
-        (gltf::accessor::DataType::F32, gltf::accessor::Dimensions::Mat3) => Some(Format::MAT3),
-        (gltf::accessor::DataType::F32, gltf::accessor::Dimensions::Mat4) => Some(Format::MAT4),
-        (_, _) => None,
-    }
-}
-
-fn convert_geom_patch(
+/// Convert a GLTF Primitive to a NOODLES geometry patch
+///
+/// Takes a list of buffer views to refer to, the GLTF primitive, and the material to use when building the patch.
+fn convert_geometry_patch(
     buffer_views: &[BufferViewReference],
     prim: &gltf::Primitive,
     mat: MaterialReference,
 ) -> Option<ServerGeometryPatch> {
     let mut attrib = Vec::<ServerGeometryAttribute>::new();
 
+    // We need to send the vertex count. We'll try to extract this count
+    // from the position attribute later on.
     let mut pos_count: Option<u64> = None;
 
     for (attr_sem, attr_accessor) in prim.attributes() {
-        match attr_sem {
-            gltf::Semantic::Positions => {
-                log::debug!(
-                    "Found position attribute. Vertex count {}",
-                    attr_accessor.count()
-                );
-                pos_count = Some(attr_accessor.count() as u64)
-            }
-            _ => (),
+        // If this is a position, steal the vertex count.
+        if attr_sem == gltf::Semantic::Positions {
+            log::debug!(
+                "Found position attribute. Vertex count {}",
+                attr_accessor.count()
+            );
+            pos_count = Some(attr_accessor.count() as u64)
         }
 
+        // Get the attribute semantic and corresponding slot
         let (n_sem, n_slot) = match attr_sem.into_noodles() {
             Some(x) => x,
             None => continue,
         };
 
-        let format = match accessor_format(&attr_accessor) {
+        // What is the attribute format?
+        let format = match attr_accessor.clone().into_noodles() {
             Some(x) => x,
             None => {
                 log::warn!("No way to convert GLTF accessor to NOODLES");
@@ -172,6 +197,7 @@ fn convert_geom_patch(
             }
         };
 
+        // Get the GLTF buffer view
         let g_view = match attr_accessor.view() {
             Some(x) => x,
             None => {
@@ -204,7 +230,9 @@ fn convert_geom_patch(
         attrib.push(n_attr);
     }
 
+    // Optional indexed geometry processing
     let n_index = prim.indices().and_then(|f| {
+        // Get the GLTF buffer view of the indicies
         let g_view = match f.view() {
             Some(x) => x,
             None => {
@@ -213,7 +241,8 @@ fn convert_geom_patch(
             }
         };
 
-        let format = match accessor_format(&f) {
+        // Format of the index data
+        let format = match f.clone().into_noodles() {
             Some(x) => x,
             None => {
                 log::warn!("No way to convert GLTF accessor to NOODLES");
@@ -236,6 +265,7 @@ fn convert_geom_patch(
         })
     });
 
+    // Assemble the patch
     Some(ServerGeometryPatch {
         attributes: attrib,
         vertex_count: pos_count.unwrap_or_default(),
@@ -245,6 +275,9 @@ fn convert_geom_patch(
     })
 }
 
+/// Recursively convert each GLTF node.
+///
+/// Takes the NOODLES state to add entities, corresponding GLTF node, an optional NOODLES parent to use, a list of meshes to refer to, and a mapping of GLTF node id to NOODLES entity reference (updated during this call)
 fn recursive_convert_node(
     state: &mut ServerState,
     node: &gltf::Node,
@@ -252,14 +285,16 @@ fn recursive_convert_node(
     n_meshes: &[GeometryReference],
     n_nodes: &mut HashMap<usize, EntityReference>,
 ) -> EntityReference {
+    // If the node already exists, return it
     if let Some(e) = n_nodes.get(&node.index()) {
         return e.clone();
     }
 
-    // build
+    // does not exist, build
 
     let tf = {
         // there's got to be a better way
+        // but we need to take a nested 4x4 array to a 16x1 array. There's a nightly call, but we don't want to require it.
         let tf = node.transform().matrix();
         let mut ret = [0.0; 16];
         let mut count: usize = 0;
@@ -278,6 +313,7 @@ fn recursive_convert_node(
         ret
     };
 
+    // Determine the representation
     let rep: Option<ServerEntityRepresentation> = node.mesh().map(|f| {
         let mesh = n_meshes[f.index()].clone();
         ServerEntityRepresentation::new_render(RenderRepresentation {
@@ -286,6 +322,7 @@ fn recursive_convert_node(
         })
     });
 
+    // Create a new entity for this node
     let new_ent = state.entities.new_component(ServerEntityState {
         name: node.name().map(|f| f.to_string()),
         mutable: ServerEntityStateUpdatable {
@@ -296,10 +333,10 @@ fn recursive_convert_node(
         },
     });
 
+    // Update the node mapping
     n_nodes.insert(node.index(), new_ent.clone());
 
-    // lets get any kids
-
+    // Build all children
     for child in node.children() {
         recursive_convert_node(state, &child, Some(new_ent.clone()), n_meshes, n_nodes);
     }
@@ -307,6 +344,7 @@ fn recursive_convert_node(
     new_ent
 }
 
+/// Import a GLTF file
 pub fn import_file(
     path: &Path,
     state: ServerStatePtr,
@@ -316,10 +354,11 @@ pub fn import_file(
 
     let mut published = Vec::<uuid::Uuid>::new();
 
+    // Import and fetch whatever buffers we can. Note that this will NOT fetch
+    // remote data hosted on external URIs. We will pass those along.
     let (gltf, buffers, _images) = gltf::import(path)?;
 
-    log::debug!("Adding buffers");
-
+    log::debug!("Starting NOODLES conversion:");
     let n_buffers: Vec<_> = buffers
         .iter()
         .enumerate()
@@ -341,7 +380,8 @@ pub fn import_file(
         })
         .collect();
 
-    log::debug!("Adding buffer views");
+    log::debug!("Added {} buffers", n_buffers.len());
+
     let n_buffer_views: Vec<_> = gltf
         .views()
         .map(|f| {
@@ -364,6 +404,8 @@ pub fn import_file(
         })
         .collect();
 
+    log::debug!("Added {} buffer views", n_buffer_views.len());
+
     let n_images: Vec<_> = gltf
         .images()
         .enumerate()
@@ -384,7 +426,8 @@ pub fn import_file(
         })
         .collect();
 
-    log::debug!("Adding samplers");
+    log::debug!("Added {} images", n_images.len());
+
     let n_samplers: Vec<_> = gltf
         .samplers()
         .map(|f| {
@@ -398,7 +441,8 @@ pub fn import_file(
         })
         .collect();
 
-    log::debug!("Adding textures");
+    log::debug!("Added {} samplers", n_samplers.len());
+
     let n_texture: Vec<_> = gltf
         .textures()
         .map(|f| {
@@ -414,7 +458,8 @@ pub fn import_file(
         })
         .collect();
 
-    log::debug!("Adding material");
+    log::debug!("Added {} textures", n_texture.len());
+
     let n_material: Vec<_> = gltf
         .materials()
         .map(|f| {
@@ -462,9 +507,10 @@ pub fn import_file(
         })
         .collect();
 
+    log::debug!("Added {} materials", n_material.len());
+
     let mut n_default_mat: Option<MaterialReference> = None;
 
-    log::debug!("Adding geometry");
     let n_geoms: Vec<_> = gltf
         .meshes()
         .map(|f| {
@@ -484,7 +530,7 @@ pub fn import_file(
                                 n_default_mat.clone().unwrap()
                             });
 
-                        convert_geom_patch(&n_buffer_views, &f, mat)
+                        convert_geometry_patch(&n_buffer_views, &f, mat)
                     })
                     .collect(),
             };
@@ -493,13 +539,15 @@ pub fn import_file(
         })
         .collect();
 
-    log::debug!("Adding nodes");
+    log::debug!("Added {} meshes", n_geoms.len());
 
     let mut n_nodes = HashMap::<usize, EntityReference>::new();
 
     for node in gltf.nodes() {
         recursive_convert_node(&mut lock, &node, None, &n_geoms, &mut n_nodes);
     }
+
+    log::debug!("Added {} nodes", n_nodes.len());
 
     let root = Object {
         parts: gltf

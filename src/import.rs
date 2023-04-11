@@ -21,6 +21,7 @@ impl Display for ImportError {
 
 impl std::error::Error for ImportError {}
 
+/// Attempt to import a geometry file.
 pub fn import_file(
     path: &Path,
     state: ServerStatePtr,

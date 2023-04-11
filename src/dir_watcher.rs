@@ -1,3 +1,5 @@
+//! Module to implement file and directory watching
+
 use std::fs;
 use std::path::PathBuf;
 
@@ -9,6 +11,12 @@ use notify::{Config, Event, RecommendedWatcher, RecursiveMode, Watcher};
 
 use tokio::sync::mpsc;
 
+/// A 'ring' buffer of file paths.
+///
+/// This is to implement a delay in loading files. For example, some files,
+/// when appearing in the file system, are not actually complete; some buffers
+/// may still need to be written, etc. This ring buffer holds a user-configured
+/// queue of files to load; files pushed out of the queue will then be loaded.
 struct FilePathRing {
     buffs: std::collections::VecDeque<PathBuf>,
     source_id: uuid::Uuid,
@@ -16,12 +24,18 @@ struct FilePathRing {
 }
 
 impl FilePathRing {
+    /// Send a command to load a new file
+    ///
+    /// Sends a command to the rest of platter that a new path should be loaded.
     async fn send(&self, p: PathBuf, tx: &mpsc::Sender<PlatterCommand>) {
         tx.send(PlatterCommand::LoadFile(p.clone(), Some(self.source_id)))
             .await
             .unwrap();
     }
 
+    /// Add a file to the queue.
+    ///
+    /// If the queue is full, pushes out (FIFO) a file to load.
     async fn add(&mut self, p: PathBuf, tx: &mpsc::Sender<PlatterCommand>) {
         if self.max_size == 0 {
             self.send(p, tx).await;
@@ -38,6 +52,10 @@ impl FilePathRing {
     }
 }
 
+/// Create the file watcher loop
+///
+/// Takes a channel to send commands back to the platter system, an ID to mark
+/// resources loaded from this watcher, and a directory to watch.
 pub async fn launch_file_watcher(
     tx: mpsc::Sender<PlatterCommand>,
     source_id: uuid::Uuid,
@@ -78,6 +96,7 @@ pub async fn launch_file_watcher(
     }
 }
 
+/// Construct a file watcher and channel for notifications
 fn setup_watcher() -> notify::Result<(RecommendedWatcher, mpsc::Receiver<notify::Result<Event>>)> {
     let (send_from_watcher, recv_from_watcher) = mpsc::channel(16);
 
