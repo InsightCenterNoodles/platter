@@ -1363,7 +1363,6 @@ version = "0.2.0"
 dependencies = [
  "anyhow",
  "clap 4.2.1",
- "closure",
  "colabrodo_common",
  "colabrodo_server",
  "env_logger 0.10.0",
