@@ -2,7 +2,7 @@ use std::{collections::HashMap, path::Path};
 
 use anyhow::Result;
 
-use crate::object::{Object, ObjectRoot};
+use crate::scene::{Scene, SceneObject};
 use colabrodo_common::{components::*, types::Format};
 use colabrodo_server::{server_http::*, server_messages::*, server_state::*};
 use gltf;
@@ -295,6 +295,7 @@ fn recursive_convert_node(
     let tf = {
         // there's got to be a better way
         // but we need to take a nested 4x4 array to a 16x1 array. There's a nightly call, but we don't want to require it.
+        // And i dont want to have to use transmute
         let tf = node.transform().matrix();
         let mut ret = [0.0; 16];
         let mut count: usize = 0;
@@ -349,7 +350,7 @@ pub fn import_file(
     path: &Path,
     state: ServerStatePtr,
     asset_store: AssetStorePtr,
-) -> Result<ObjectRoot> {
+) -> Result<Scene> {
     let mut lock = state.lock().unwrap();
 
     let mut published = Vec::<uuid::Uuid>::new();
@@ -365,6 +366,8 @@ pub fn import_file(
         .map(|(i, f)| {
             let id = create_asset_id();
 
+            // Unconditionally publish each buffer as a noodles buffer.
+
             published.push(id);
 
             let res = add_asset(
@@ -373,7 +376,7 @@ pub fn import_file(
                 Asset::new_from_slice(f.0.as_slice()),
             );
 
-            log::debug!("Adding {i}");
+            log::debug!("Adding buffer {i}");
 
             lock.buffers
                 .new_component(BufferState::new_from_url(&res, f.len() as u64))
@@ -549,7 +552,7 @@ pub fn import_file(
 
     log::debug!("Added {} nodes", n_nodes.len());
 
-    let root = Object {
+    let root = SceneObject {
         parts: gltf
             .nodes()
             .enumerate()
@@ -558,5 +561,5 @@ pub fn import_file(
         children: vec![],
     };
 
-    Ok(ObjectRoot::new(root, published, asset_store))
+    Ok(Scene::new(root, published, asset_store))
 }

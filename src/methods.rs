@@ -1,3 +1,5 @@
+//! NOODLES methods for the platter server
+
 use colabrodo_common::client_communication::*;
 use colabrodo_common::common::strings;
 use colabrodo_common::components::MethodArg;
@@ -7,15 +9,16 @@ use colabrodo_server::server_messages::*;
 use colabrodo_server::server_state::*;
 use nalgebra_glm::Quat;
 
-use crate::object::ObjectRoot;
 use crate::platter_state::PlatterState;
 use crate::platter_state::PlatterStatePtr;
+use crate::scene::Scene;
 
 use std::sync::Arc;
 use std::sync::Mutex;
 
 // ================
 
+/// Get an entity given an invocation
 fn get_entity(
     context: Option<InvokeIDType>,
     state: &ServerState,
@@ -31,17 +34,19 @@ fn get_entity(
 
 // ================
 
+/// Given an invocation context, resolve to a Scene
 fn get_object<'a>(
     app: &'a mut PlatterState,
     state: &ServerState,
     context: Option<InvokeIDType>,
-) -> Result<&'a mut ObjectRoot, MethodException> {
+) -> Result<&'a mut Scene, MethodException> {
     let reference = get_entity(context, state)?;
     app.find_id(&reference)
         .and_then(|id| app.get_object_mut(id))
         .ok_or_else(|| MethodException::internal_error(None))
 }
 
+/// Trait to clean up user-provided data
 trait Sanitize {
     fn sanitize(self) -> Self;
 }
@@ -52,6 +57,7 @@ where
 {
     fn sanitize(self) -> Self {
         self.map(|f| {
+            // Some clients provide nans...
             if f.is_nan() {
                 return T::default();
             }

@@ -6,8 +6,8 @@ pub mod import;
 pub mod import_gltf;
 pub mod import_obj;
 mod methods;
-mod object;
 mod platter_state;
+mod scene;
 
 use colabrodo_server::server::{server_main, tokio, ServerOptions};
 use colabrodo_server::server_http::*;
@@ -52,7 +52,7 @@ async fn main() {
     let init = platter_state::PlatterInit {
         command_stream: command_tx.clone(),
         watcher_command_stream: watcher_tx,
-        link: asset_server.clone(),
+        asset_store: asset_server.clone(),
         size_large_limit: args.size_large_limit,
     };
 

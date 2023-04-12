@@ -12,7 +12,7 @@ use anyhow::{Context, Result};
 use nalgebra_glm;
 use nalgebra_glm::Vec3;
 
-use crate::object::{Object, ObjectRoot};
+use crate::scene::{Scene, SceneObject};
 
 use colabrodo_common::components::*;
 use colabrodo_server::{
@@ -24,7 +24,7 @@ pub fn import_file(
     path: &Path,
     state: ServerStatePtr,
     asset_store: AssetStorePtr,
-) -> Result<ObjectRoot> {
+) -> Result<Scene> {
     let file = File::open(path)?;
     let mut buf_reader = BufReader::new(file);
 
@@ -51,7 +51,7 @@ pub fn import_file(
 
     let published = Vec::<uuid::Uuid>::new();
 
-    let mut root = Object {
+    let mut root = SceneObject {
         parts: vec![],
         children: vec![],
     };
@@ -106,7 +106,7 @@ pub fn import_file(
         root.parts.push(entity);
     }
 
-    Ok(ObjectRoot::new(root, published, asset_store))
+    Ok(Scene::new(root, published, asset_store))
 }
 
 type WFFunc = fn(obj: &mut WFObjectState, line: SplitWhitespace) -> Option<()>;
