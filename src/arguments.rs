@@ -30,7 +30,7 @@ pub struct Directory {
 
 #[derive(Parser)]
 #[command(name = "platter")]
-#[command(version = "0.1")]
+#[command(version = clap::crate_version!())]
 #[command(about = "Publish meshes to the NOODLES protocol", long_about = None)]
 pub struct Arguments {
     #[command(subcommand)]
