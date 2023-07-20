@@ -37,12 +37,12 @@ pub struct Arguments {
     pub source: Source,
 
     /// Host address to bind to
-    #[arg(short, long, default_value_t = String::from("localhost"))]
-    pub address: String,
+    #[arg(short, long)]
+    pub address: Option<url::Url>,
 
     /// Port to listen on for clients
-    #[arg(short, long, default_value_t = 50000)]
-    pub port: u16,
+    #[arg(short, long)]
+    pub port: Option<u16>,
 
     /// Size in bytes of a 'large' mesh. Large meshes will not be sent inline.
     #[arg(short, long, default_value_t = 4096)]

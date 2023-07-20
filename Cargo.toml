@@ -5,8 +5,8 @@ edition = "2021"
 
 [dependencies]
 clap = { version = "4.1", features = ["derive", "cargo"] }
-colabrodo_server = { git = 'https://github.com/InsightCenterNoodles/colabrodo', rev = "fdee847fabaed64ee7e78718ea02e186377a93a7" }
-colabrodo_common = { git = 'https://github.com/InsightCenterNoodles/colabrodo', rev = "fdee847fabaed64ee7e78718ea02e186377a93a7" }
+colabrodo_server = { git = 'https://github.com/InsightCenterNoodles/colabrodo', rev = "19e79758ab362035536090442add8e03ad212e8e" }
+colabrodo_common = { git = 'https://github.com/InsightCenterNoodles/colabrodo', rev = "19e79758ab362035536090442add8e03ad212e8e" }
 env_logger = "0.10.0"
 log = "0.4"
 notify = { version = "5.1", default-features = false, features = ["macos_kqueue"] }
@@ -15,6 +15,7 @@ nalgebra-glm = "0.18"
 num-traits = "0.2.15"
 gltf = "1.1"
 anyhow = "1.0.70"
+url = "2.4.0"
 
 [dependencies.uuid]
 version = "1.3"

@@ -9,6 +9,7 @@ mod methods;
 mod platter_state;
 mod scene;
 
+use colabrodo_common::network::default_local_ip_address;
 use colabrodo_server::server::{server_main, tokio, ServerOptions};
 use colabrodo_server::server_http::*;
 use colabrodo_server::server_state::ServerState;
@@ -36,12 +37,17 @@ async fn main() {
     let args = arguments::get_arguments();
 
     // Set up options for the noodles server
-    let opts = ServerOptions {
-        host: format!("{}:{}", args.address, args.port),
-    };
+
+    let mut host = args.address.unwrap_or_else(default_local_ip_address);
+
+    if let Some(port) = args.port {
+        host.set_port(Some(port)).unwrap();
+    }
+
+    let opts = ServerOptions { host };
 
     // Prep asset server
-    let asset_server = make_asset_server(AssetServerOptions::default());
+    let asset_server = make_asset_server(AssetServerOptions::new(&opts));
 
     // Prep command streams
     let (command_tx, command_rx) = tokio::sync::mpsc::channel(16);
