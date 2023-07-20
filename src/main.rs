@@ -9,7 +9,7 @@ mod methods;
 mod platter_state;
 mod scene;
 
-use colabrodo_common::network::default_local_ip_address;
+use colabrodo_common::network::default_server_address;
 use colabrodo_server::server::{server_main, tokio, ServerOptions};
 use colabrodo_server::server_http::*;
 use colabrodo_server::server_state::ServerState;
@@ -38,7 +38,7 @@ async fn main() {
 
     // Set up options for the noodles server
 
-    let mut host = args.address.unwrap_or_else(default_local_ip_address);
+    let mut host = args.address.unwrap_or_else(default_server_address);
 
     if let Some(port) = args.port {
         host.set_port(Some(port)).unwrap();
