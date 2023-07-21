@@ -28,3 +28,6 @@ features = [
 
 [features]
 use_assimp = ["dep:russimp"]
+
+[dev-dependencies]
+approx = "0.5.1"

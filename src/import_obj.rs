@@ -106,7 +106,7 @@ pub fn import_file(
         root.parts.push(entity);
     }
 
-    Ok(Scene::new(root, published, asset_store))
+    Ok(Scene::new(root, published, Some(asset_store)))
 }
 
 type WFFunc = fn(obj: &mut WFObjectState, line: SplitWhitespace) -> Option<()>;

@@ -561,5 +561,5 @@ pub fn import_file(
         children: vec![],
     };
 
-    Ok(Scene::new(root, published, asset_store))
+    Ok(Scene::new(root, published, Some(asset_store)))
 }

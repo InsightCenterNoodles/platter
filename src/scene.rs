@@ -15,7 +15,7 @@ pub struct Scene {
     pub root: SceneObject,
 
     /// A reference to the http server. Needed when we drop to unpublish assets.
-    asset_store: AssetStorePtr,
+    asset_store: Option<AssetStorePtr>,
 }
 
 /// Some file formats have a heirarchy. Some don't. This tries to cater to both.
@@ -31,18 +31,24 @@ pub struct SceneObject {
 
 impl Drop for Scene {
     fn drop(&mut self) {
-        for id in &self.published {
-            remove_asset(self.asset_store.clone(), *id);
+        if let Some(ptr) = &self.asset_store {
+            for id in &self.published {
+                remove_asset(ptr.clone(), *id);
+            }
         }
     }
 }
 
 impl Scene {
     /// Create a new scene from a root object, assets used, and a link to the http server.
-    pub fn new(root: SceneObject, assets: Vec<uuid::Uuid>, asset_store: AssetStorePtr) -> Self {
+    pub fn new(
+        root: SceneObject,
+        assets: Vec<uuid::Uuid>,
+        asset_store: Option<AssetStorePtr>,
+    ) -> Self {
         Self {
             position: Vec3::zeros(),
-            rotation: Quat::default(),
+            rotation: Quat::identity(),
             scale: Vec3::repeat(1.0),
             published: assets,
             root,
@@ -69,7 +75,7 @@ impl Scene {
     }
 
     /// Refresh the transformation matrix of this scene
-    pub fn update_transform(&mut self) {
+    pub fn update_transform(&mut self) -> Mat4 {
         let mut tf = Mat4::new_translation(&self.position);
         tf *= quat_to_mat4(&self.rotation);
         tf *= Mat4::new_nonuniform_scaling(&self.scale);
@@ -86,5 +92,41 @@ impl Scene {
 
             update.patch(first);
         }
+
+        tf
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use super::Scene;
+    use approx::assert_relative_eq;
+    use nalgebra_glm::*;
+
+    #[test]
+    fn test_scene_transforms() {
+        let mut s = Scene::new(
+            super::SceneObject {
+                parts: Vec::new(),
+                children: Vec::new(),
+            },
+            Vec::new(),
+            None,
+        );
+
+        s.set_position(Vec3::new(1.0, 2.0, 3.0));
+
+        let tf = s.update_transform();
+
+        assert_relative_eq!(
+            tf,
+            &Mat4::from_columns(&[
+                [1.0, 0.0, 0.0, 0.0].into(),
+                [0.0, 1.0, 0.0, 0.0].into(),
+                [0.0, 0.0, 1.0, 0.0].into(),
+                [1.0, 2.0, 3.0, 1.0].into(),
+            ]),
+            max_relative = 0.001,
+        );
     }
 }
