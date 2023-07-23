@@ -58,18 +58,21 @@ impl Scene {
 
     /// Update the position of this scene
     pub fn set_position(&mut self, p: Vec3) {
+        log::debug!("Setting position: {p:?}");
         self.position = p;
         self.update_transform();
     }
 
     /// Update the rotation of the scene
     pub fn set_rotation(&mut self, q: Quat) {
+        log::debug!("Setting rotation: {q:?}");
         self.rotation = q;
         self.update_transform();
     }
 
     /// Update the scale of the scene
     pub fn set_scale(&mut self, s: Vec3) {
+        log::debug!("Setting scales: {s:?}");
         self.scale = s;
         self.update_transform();
     }
