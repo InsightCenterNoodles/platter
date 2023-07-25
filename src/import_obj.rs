@@ -9,8 +9,7 @@ use std::{
 
 use anyhow::{Context, Result};
 
-use nalgebra_glm;
-use nalgebra_glm::Vec3;
+use nalgebra::Vector3;
 
 use crate::scene::{Scene, SceneObject};
 
@@ -343,10 +342,10 @@ fn assemble_vertex(obj: &WFObjectState, f: FaceDef) -> VertexTexture {
 
 fn get_concave_vertex(indicies: &[u32], vs: &[VertexTexture]) -> [u32; 4] {
     for window in indicies.windows(4) {
-        let v = Vec3::from(vs[window[0] as usize].position);
-        let v2 = Vec3::from(vs[window[1] as usize].position);
-        let v1 = Vec3::from(vs[window[2] as usize].position);
-        let v0 = Vec3::from(vs[window[3] as usize].position);
+        let v = Vector3::from(vs[window[0] as usize].position);
+        let v2 = Vector3::from(vs[window[1] as usize].position);
+        let v1 = Vector3::from(vs[window[2] as usize].position);
+        let v0 = Vector3::from(vs[window[3] as usize].position);
 
         let left = (v0 - v).normalize();
         let diag = (v1 - v).normalize();

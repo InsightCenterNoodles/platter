@@ -1,12 +1,11 @@
 use colabrodo_server::{server_http::*, server_messages::*};
-
-use nalgebra_glm::*;
+use nalgebra::{Isometry3, Matrix4, Quaternion, Scale3, Translation3, UnitQuaternion, Vector3};
 
 /// A scene; a collection of renderable objects
 pub struct Scene {
-    position: Vec3,
-    rotation: Quat,
-    scale: Vec3,
+    position: Translation3<f32>,
+    rotation: UnitQuaternion<f32>,
+    scale: Scale3<f32>,
 
     /// A list of related binary assets published on the http server
     pub published: Vec<uuid::Uuid>,
@@ -47,9 +46,9 @@ impl Scene {
         asset_store: Option<AssetStorePtr>,
     ) -> Self {
         Self {
-            position: Vec3::zeros(),
-            rotation: Quat::identity(),
-            scale: Vec3::repeat(1.0),
+            position: Translation3::identity(),
+            rotation: UnitQuaternion::identity(),
+            scale: Scale3::identity(),
             published: assets,
             root,
             asset_store,
@@ -57,31 +56,30 @@ impl Scene {
     }
 
     /// Update the position of this scene
-    pub fn set_position(&mut self, p: Vec3) {
+    pub fn set_position(&mut self, p: Vector3<f32>) {
         log::debug!("Setting position: {p:?}");
-        self.position = p;
+        self.position = Translation3::new(p.x, p.y, p.z);
         self.update_transform();
     }
 
     /// Update the rotation of the scene
-    pub fn set_rotation(&mut self, q: Quat) {
+    pub fn set_rotation(&mut self, q: Quaternion<f32>) {
         log::debug!("Setting rotation: {q:?}");
-        self.rotation = q;
+        self.rotation = UnitQuaternion::from_quaternion(q);
         self.update_transform();
     }
 
     /// Update the scale of the scene
-    pub fn set_scale(&mut self, s: Vec3) {
+    pub fn set_scale(&mut self, s: Vector3<f32>) {
         log::debug!("Setting scales: {s:?}");
-        self.scale = s;
+        self.scale = Scale3::new(s.x, s.y, s.z);
         self.update_transform();
     }
 
     /// Refresh the transformation matrix of this scene
-    pub fn update_transform(&mut self) -> Mat4 {
-        let mut tf = Mat4::new_translation(&self.position);
-        tf *= quat_to_mat4(&self.rotation);
-        tf *= Mat4::new_nonuniform_scaling(&self.scale);
+    pub fn update_transform(&mut self) -> Matrix4<f32> {
+        let iso = Isometry3::from_parts(self.position, self.rotation);
+        let tf = iso.to_homogeneous() * self.scale.to_homogeneous();
 
         if log::log_enabled!(log::Level::Debug) {
             log::debug!("Update object transform: {tf:?}");
@@ -104,7 +102,7 @@ impl Scene {
 mod test {
     use super::Scene;
     use approx::assert_relative_eq;
-    use nalgebra_glm::*;
+    use nalgebra::{point, vector, Matrix4, Quaternion};
 
     #[test]
     fn test_scene_transforms() {
@@ -117,19 +115,134 @@ mod test {
             None,
         );
 
-        s.set_position(Vec3::new(1.0, 2.0, 3.0));
+        s.set_position(vector![1.0, 2.0, 3.0]);
 
         let tf = s.update_transform();
 
         assert_relative_eq!(
             tf,
-            &Mat4::from_columns(&[
+            &Matrix4::from_columns(&[
                 [1.0, 0.0, 0.0, 0.0].into(),
                 [0.0, 1.0, 0.0, 0.0].into(),
                 [0.0, 0.0, 1.0, 0.0].into(),
                 [1.0, 2.0, 3.0, 1.0].into(),
+            ])
+        );
+
+        s.set_position(vector![0.0, 0.0, 0.0]);
+
+        let tf = s.update_transform();
+
+        assert_relative_eq!(
+            tf,
+            &Matrix4::from_columns(&[
+                [1.0, 0.0, 0.0, 0.0].into(),
+                [0.0, 1.0, 0.0, 0.0].into(),
+                [0.0, 0.0, 1.0, 0.0].into(),
+                [0.0, 0.0, 0.0, 1.0].into(),
             ]),
             max_relative = 0.001,
+        );
+
+        s.set_rotation(Quaternion::new(0.7071, 0.7071, 0.0, 0.0));
+
+        let tf = s.update_transform();
+
+        assert_relative_eq!(
+            tf,
+            &Matrix4::from_columns(&[
+                [1.0, 0.0, 0.0, 0.0].into(),
+                [0.0, 0.0, 1.0, 0.0].into(),
+                [0.0, -1.0, 0.0, 0.0].into(),
+                [0.0, 0.0, 0.0, 1.0].into(),
+            ]),
+            max_relative = 0.001,
+        );
+
+        s.set_rotation(Quaternion::identity());
+
+        let tf = s.update_transform();
+
+        assert_relative_eq!(
+            tf,
+            &Matrix4::from_columns(&[
+                [1.0, 0.0, 0.0, 0.0].into(),
+                [0.0, 1.0, 0.0, 0.0].into(),
+                [0.0, 0.0, 1.0, 0.0].into(),
+                [0.0, 0.0, 0.0, 1.0].into(),
+            ]),
+            max_relative = 0.001,
+        );
+
+        s.set_scale(vector![2.0, 3.0, 4.0]);
+
+        let tf = s.update_transform();
+
+        assert_relative_eq!(
+            tf,
+            &Matrix4::from_columns(&[
+                [2.0, 0.0, 0.0, 0.0].into(),
+                [0.0, 3.0, 0.0, 0.0].into(),
+                [0.0, 0.0, 4.0, 0.0].into(),
+                [0.0, 0.0, 0.0, 1.0].into(),
+            ]),
+            max_relative = 0.001,
+        );
+
+        s.set_scale(vector![1.0, 1.0, 1.0]);
+
+        let tf = s.update_transform();
+
+        assert_relative_eq!(
+            tf,
+            &Matrix4::from_columns(&[
+                [1.0, 0.0, 0.0, 0.0].into(),
+                [0.0, 1.0, 0.0, 0.0].into(),
+                [0.0, 0.0, 1.0, 0.0].into(),
+                [0.0, 0.0, 0.0, 1.0].into(),
+            ]),
+            max_relative = 0.001,
+        );
+
+        s.set_scale(vector![2.0, 2.0, 2.0]);
+        s.set_position(vector![3.0, 3.0, 3.0]);
+
+        let tf = s.update_transform();
+
+        assert_relative_eq!(
+            tf,
+            &Matrix4::from_columns(&[
+                [2.0, 0.0, 0.0, 0.0].into(),
+                [0.0, 2.0, 0.0, 0.0].into(),
+                [0.0, 0.0, 2.0, 0.0].into(),
+                [3.0, 3.0, 3.0, 1.0].into(),
+            ]),
+            max_relative = 0.001,
+        );
+
+        assert_relative_eq!(
+            tf.transform_point(&point![4.0, 4.0, 4.0]),
+            &point!(11.0, 11.0, 11.0)
+        );
+
+        s.set_scale(vector![2.0, 1.0, 0.5]);
+
+        let (sin, cos) = (30.0_f32.to_radians() / 2.0_f32).sin_cos();
+
+        s.set_rotation(Quaternion::new(cos, sin, 0.0, 0.0));
+        s.set_position(vector![10.0, 20.0, 30.0]);
+
+        let tf = s.update_transform();
+
+        assert_relative_eq!(
+            tf,
+            &Matrix4::from_columns(&[
+                [2.0, 0.0, 0.0, 0.0].into(),
+                [0.0, 0.866, 0.5, 0.0].into(),
+                [0.0, -0.25, 0.433, 0.0].into(),
+                [10.0, 20.0, 30.0, 1.0].into(),
+            ]),
+            max_relative = 0.001
         );
     }
 }

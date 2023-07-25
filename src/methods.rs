@@ -7,7 +7,6 @@ use colabrodo_common::value_tools::*;
 use colabrodo_server::server::make_method_function;
 use colabrodo_server::server_messages::*;
 use colabrodo_server::server_state::*;
-use nalgebra_glm::Quat;
 
 use crate::platter_state::PlatterState;
 use crate::platter_state::PlatterStatePtr;
@@ -15,6 +14,8 @@ use crate::scene::Scene;
 
 use std::sync::Arc;
 use std::sync::Mutex;
+
+use nalgebra::Quaternion;
 
 // ================
 
@@ -92,7 +93,7 @@ make_method_function!(set_rotation,
 
         let q = quaternion.sanitize();
 
-        obj.set_rotation(Quat::new(q[3], q[0], q[1], q[2]));
+        obj.set_rotation(Quaternion::new(q[3], q[0], q[1], q[2]));
 
         Ok(None)
     }

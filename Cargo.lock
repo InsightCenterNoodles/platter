@@ -1150,6 +1150,7 @@ checksum = "307ed9b18cc2423f29e83f84fd23a8e73628727990181f18641a8b5dc2ab1caa"
 dependencies = [
  "approx",
  "matrixmultiply",
+ "nalgebra-macros",
  "num-complex",
  "num-rational",
  "num-traits",
@@ -1158,15 +1159,14 @@ dependencies = [
 ]
 
 [[package]]
-name = "nalgebra-glm"
-version = "0.18.0"
+name = "nalgebra-macros"
+version = "0.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e68879ff227a94627e63bbd518b4f82b8f0cc56bb01a498251507de6d1c412d6"
+checksum = "91761aed67d03ad966ef783ae962ef9bbaca728d2dd7ceb7939ec110fffad998"
 dependencies = [
- "approx",
- "nalgebra",
- "num-traits",
- "simba",
+ "proc-macro2",
+ "quote",
+ "syn 1.0.109",
 ]
 
 [[package]]
@@ -1367,7 +1367,7 @@ dependencies = [
  "env_logger 0.10.0",
  "gltf",
  "log",
- "nalgebra-glm",
+ "nalgebra",
  "notify",
  "num-traits",
  "russimp",

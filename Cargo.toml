@@ -11,7 +11,7 @@ env_logger = "0.10.0"
 log = "0.4"
 notify = { version = "5.1", default-features = false, features = ["macos_kqueue"] }
 russimp = { version = "2.0", features = ["static-link"], optional=true }
-nalgebra-glm = "0.18"
+nalgebra = "0.32"
 num-traits = "0.2.15"
 gltf = "1.1"
 anyhow = "1.0.70"
