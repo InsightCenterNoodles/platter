@@ -5,7 +5,7 @@ use std::path::PathBuf;
 
 use crate::{arguments::Directory, platter_state::PlatterCommand};
 use colabrodo_server::server::tokio;
-use notify::event::CreateKind;
+use notify::event::ModifyKind;
 use notify::EventKind;
 use notify::{Config, Event, RecommendedWatcher, RecursiveMode, Watcher};
 
@@ -86,7 +86,7 @@ pub async fn launch_file_watcher(
     while let Some(msg) = rx.recv().await {
         if let Ok(event) = msg {
             log::debug!("Filesystem change: {event:?}");
-            if let EventKind::Create(CreateKind::File) = event.kind {
+            if let EventKind::Modify(ModifyKind::Data(_)) = event.kind {
                 for p in event.paths {
                     log::info!("New file detected: {}", p.display());
                     path_ring.add(p, &tx).await;
