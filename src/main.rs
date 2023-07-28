@@ -53,7 +53,7 @@ async fn main() {
     let (command_tx, command_rx) = tokio::sync::mpsc::channel(16);
 
     // Prep streams for the watcher controller
-    let (watcher_tx, mut watcher_rx) = tokio::sync::mpsc::channel(16);
+    let (watcher_tx, mut watcher_rx) = tokio::sync::mpsc::unbounded_channel();
 
     let init = platter_state::PlatterInit {
         command_stream: command_tx.clone(),

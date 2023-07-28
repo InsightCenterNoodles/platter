@@ -24,7 +24,7 @@ pub struct PlatterInit {
     pub command_stream: tokio::sync::mpsc::Sender<PlatterCommand>,
 
     /// Stream for commands from the directory watcher
-    pub watcher_command_stream: tokio::sync::mpsc::Sender<(Directory, uuid::Uuid)>,
+    pub watcher_command_stream: tokio::sync::mpsc::UnboundedSender<(Directory, uuid::Uuid)>,
 
     /// Where to store large assets
     pub asset_store: AssetStorePtr,
@@ -221,7 +221,7 @@ pub fn handle_command(platter_state: PlatterStatePtr, c: PlatterCommand) {
 
             this.init
                 .watcher_command_stream
-                .blocking_send((dir, s_id))
+                .send((dir, s_id))
                 .unwrap();
         }
     }
