@@ -1,6 +1,4 @@
 mod arguments;
-#[cfg(use_assimp)]
-pub mod assimp_path;
 mod dir_watcher;
 pub mod import;
 pub mod import_gltf;
