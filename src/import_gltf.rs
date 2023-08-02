@@ -357,7 +357,7 @@ pub fn import_file(
 
     // Import and fetch whatever buffers we can. Note that this will NOT fetch
     // remote data hosted on external URIs. We will pass those along.
-    let (gltf, buffers, _images) = gltf::import(path)?;
+    let (gltf, buffers) = decode_gltf(path)?;
 
     log::debug!("Starting NOODLES conversion:");
     let n_buffers: Vec<_> = buffers
@@ -562,4 +562,18 @@ pub fn import_file(
     };
 
     Ok(Scene::new(root, published, Some(asset_store)))
+}
+
+type Decode = (gltf::Document, Vec<gltf::buffer::Data>);
+
+fn decode_gltf(path: &Path) -> Result<Decode, gltf::Error> {
+    let base = path.parent().unwrap_or_else(|| Path::new("./"));
+    let file = std::fs::File::open(path).map_err(gltf::Error::Io)?;
+    let reader = std::io::BufReader::new(file);
+
+    let doc = gltf::Gltf::from_reader(reader)?;
+
+    let buffers = gltf::import_buffers(&doc.document, Some(base), doc.blob)?;
+
+    Ok((doc.document, buffers))
 }
