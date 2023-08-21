@@ -50,6 +50,8 @@ async fn main() {
     // Prep command streams
     let (command_tx, command_rx) = tokio::sync::mpsc::channel(16);
 
+    let (stop_tx, _) = tokio::sync::broadcast::channel(1);
+
     // Prep streams for the watcher controller
     let (watcher_tx, mut watcher_rx) = tokio::sync::mpsc::unbounded_channel();
 
@@ -68,8 +70,8 @@ async fn main() {
         while let Some(msg) = watcher_rx.recv().await {
             tokio::spawn(dir_watcher::launch_file_watcher(
                 spawner_tx_clone.clone(),
-                msg.1,
-                msg.0,
+                msg,
+                stop_tx.subscribe(),
             ));
         }
     });

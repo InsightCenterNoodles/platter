@@ -26,3 +26,5 @@ features = [
 
 [dev-dependencies]
 approx = "0.5.1"
+tempdir = "0.3"
+serial_test = "*"

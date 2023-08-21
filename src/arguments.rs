@@ -26,6 +26,10 @@ pub struct Directory {
     /// When a new file shows up, discard previous objects before loading
     #[arg(short, long)]
     pub latest_only: bool,
+
+    /// New files may show up in subdirectories. Combine with `latest_only`.
+    #[arg(short, long)]
+    pub organize_by_dir: bool,
 }
 
 #[derive(Parser)]

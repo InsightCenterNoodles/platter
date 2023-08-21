@@ -24,7 +24,7 @@ pub struct PlatterInit {
     pub command_stream: tokio::sync::mpsc::Sender<PlatterCommand>,
 
     /// Stream for commands from the directory watcher
-    pub watcher_command_stream: tokio::sync::mpsc::UnboundedSender<(Directory, uuid::Uuid)>,
+    pub watcher_command_stream: tokio::sync::mpsc::UnboundedSender<Directory>,
 
     /// Where to store large assets
     pub asset_store: AssetStorePtr,
@@ -55,21 +55,29 @@ pub struct PlatterState {
     next_item_id: u32,
 
     /// Tag UUID to Scene to identify scenes derived from a single source
-    source_map: HashMap<uuid::Uuid, HashSet<u32>>,
-
-    /// A map that says if scenes from a tag are to be exclusive; that only one scene with a tag can exist
-    source_exclusive: HashSet<uuid::Uuid>,
+    source_map: HashMap<Tag, HashSet<u32>>,
 }
 
 pub type PlatterStatePtr = Arc<std::sync::Mutex<PlatterState>>;
+
+#[derive(Debug, PartialEq, Eq, Hash, Clone, Copy)]
+pub struct Tag(uuid::Uuid);
+
+impl Tag {
+    pub fn new() -> Tag {
+        Tag(uuid::Uuid::new_v4())
+    }
+}
 
 /// An instruction to platter
 #[derive(Debug)]
 pub enum PlatterCommand {
     /// Load a file from disk, with an optional tag
-    LoadFile(PathBuf, Option<uuid::Uuid>),
+    LoadFile(PathBuf, Option<Tag>),
     /// Start watching a directory
     WatchDirectory(arguments::Directory),
+    /// Clear a tag
+    ClearTag(Tag),
 }
 
 impl PlatterState {
@@ -85,7 +93,6 @@ impl PlatterState {
             root_to_item: HashMap::new(),
             next_item_id: 0,
             source_map: HashMap::new(),
-            source_exclusive: HashSet::new(),
         }));
 
         ret.lock().unwrap().methods = setup_methods(state, ret.clone());
@@ -101,7 +108,7 @@ impl PlatterState {
     }
 
     /// An order to import a filesystem item. This could be a directory or a file
-    fn import_filesystem_item(&mut self, p: &Path, source: Option<uuid::Uuid>) {
+    fn import_filesystem_item(&mut self, p: &Path, source: Option<Tag>) {
         if p.is_dir() {
             self.import_dir(p, source);
         } else if p.is_file() {
@@ -110,7 +117,7 @@ impl PlatterState {
     }
 
     /// Import a specific file.
-    fn import_file(&mut self, p: &Path, source: Option<uuid::Uuid>) {
+    fn import_file(&mut self, p: &Path, source: Option<Tag>) {
         log::info!("Loading file: {}", p.display());
         let res = match handle_import(p, self.state.clone(), self.init.asset_store.clone()) {
             Ok(x) => x,
@@ -126,7 +133,7 @@ impl PlatterState {
     /// Import a directory.
     ///
     /// Searches through the directory and tries to load every file encountered.
-    fn import_dir(&mut self, p: &Path, source: Option<uuid::Uuid>) {
+    fn import_dir(&mut self, p: &Path, source: Option<Tag>) {
         let paths = fs::read_dir(p).unwrap();
 
         for path in paths {
@@ -135,7 +142,7 @@ impl PlatterState {
     }
 
     /// Add an object scene to the state
-    fn add_object(&mut self, o: Scene, source: Option<uuid::Uuid>) -> u32 {
+    fn add_object(&mut self, o: Scene, source: Option<Tag>) -> u32 {
         let id = self.get_next_scene_id();
 
         let ent = o.root.parts.first().unwrap().clone();
@@ -153,11 +160,6 @@ impl PlatterState {
         self.items.insert(id, o);
 
         if let Some(sid) = source {
-            // check if we have some exclusion
-            if self.source_exclusive.contains(&sid) {
-                self.clear_source(sid);
-            }
-
             if let Some(list) = self.source_map.get_mut(&sid) {
                 list.insert(id);
             }
@@ -176,7 +178,7 @@ impl PlatterState {
     }
 
     /// Clear all objects with the same source tag
-    fn clear_source(&mut self, source: uuid::Uuid) -> Option<()> {
+    fn clear_source(&mut self, source: Tag) -> Option<()> {
         let list = self.source_map.remove(&source)?;
 
         for item in list.iter() {
@@ -211,18 +213,10 @@ pub fn handle_command(platter_state: PlatterStatePtr, c: PlatterCommand) {
                 return;
             }
 
-            let s_id = get_next_source_id();
-
-            this.source_map.insert(s_id, HashSet::new());
-
-            if dir.latest_only {
-                this.source_exclusive.insert(s_id);
-            }
-
-            this.init
-                .watcher_command_stream
-                .send((dir, s_id))
-                .unwrap();
+            this.init.watcher_command_stream.send(dir).unwrap();
+        }
+        PlatterCommand::ClearTag(tag) => {
+            this.clear_source(tag);
         }
     }
 }
@@ -234,9 +228,4 @@ fn handle_import(path: &Path, state: ServerStatePtr, asset_store: AssetStorePtr)
 
     #[cfg(not(use_assimp))]
     return import::import_file(path, state, asset_store);
-}
-
-/// Get a new tag
-fn get_next_source_id() -> uuid::Uuid {
-    uuid::Uuid::new_v4()
 }
