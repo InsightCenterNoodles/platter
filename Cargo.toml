@@ -1,30 +1,30 @@
 [package]
+edition = "2021"
 name = "platter"
 version = "0.3.0"
-edition = "2021"
 
 [dependencies]
-clap = { version = "4", features = ["derive", "cargo"] }
-colabrodo_server = { git = 'https://github.com/InsightCenterNoodles/colabrodo', rev = "9fce2eb10011dd2abc540183a9f82b7d3cc2fa02" }
-colabrodo_common = { git = 'https://github.com/InsightCenterNoodles/colabrodo', rev = "9fce2eb10011dd2abc540183a9f82b7d3cc2fa02" }
-env_logger = "0.10"
-log = "0.4"
-notify = { version = "5.1", default-features = false, features = ["macos_kqueue"] }
-nalgebra = "0.32"
-num-traits = "0.2.15"
-gltf = "1.1"
 anyhow = "1.0.70"
+clap = {version = "4", features = ["derive", "cargo"]}
+colabrodo_common = {git = 'https://github.com/InsightCenterNoodles/colabrodo', rev = "e5ec9d6731907bccb836e3c5adf9cd63395ba9f2"}
+colabrodo_server = {git = 'https://github.com/InsightCenterNoodles/colabrodo', rev = "e5ec9d6731907bccb836e3c5adf9cd63395ba9f2"}
+env_logger = "0.10"
+gltf = "1.1"
+log = "0.4"
+nalgebra = "0.32"
+notify = {version = "5.1", default-features = false, features = ["macos_kqueue"]}
+num-traits = "0.2.15"
 url = "2.4.0"
 
 [dependencies.uuid]
-version = "1.3"
 features = [
-    "v4",                
-    "fast-rng",          
-    "macro-diagnostics", 
+  "v4",
+  "fast-rng",
+  "macro-diagnostics",
 ]
+version = "1.3"
 
 [dev-dependencies]
 approx = "0.5.1"
-tempdir = "0.3"
 serial_test = "*"
+tempdir = "0.3"
