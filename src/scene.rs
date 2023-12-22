@@ -1,5 +1,5 @@
 use colabrodo_server::{server_http::*, server_messages::*};
-use nalgebra::{Isometry3, Matrix4, Quaternion, Scale3, Translation3, UnitQuaternion, Vector3};
+use nalgebra::{Matrix4, Quaternion, Scale3, Translation3, UnitQuaternion, Vector3};
 
 /// A scene; a collection of renderable objects
 pub struct Scene {
@@ -49,6 +49,7 @@ impl Scene {
             position: Translation3::identity(),
             rotation: UnitQuaternion::identity(),
             scale: Scale3::identity(),
+            //scale: Scale3::new(0.001, 0.001, 0.001),
             published: assets,
             root,
             asset_store,
@@ -78,8 +79,13 @@ impl Scene {
 
     /// Refresh the transformation matrix of this scene
     pub fn update_transform(&mut self) -> Matrix4<f32> {
-        let iso = Isometry3::from_parts(self.position, self.rotation);
-        let tf = iso.to_homogeneous() * self.scale.to_homogeneous();
+        log::debug!("Update object transform with: {:?}", self.scale);
+        let scale = self.scale.to_homogeneous();
+        let rotation = self.rotation.to_homogeneous();
+        let translate = self.position.to_homogeneous();
+
+        //let iso = Isometry3::from_parts(self.position, self.rotation);
+        let tf = translate * rotation * scale;
 
         if log::log_enabled!(log::Level::Debug) {
             log::debug!("Update object transform: {tf:?}");
