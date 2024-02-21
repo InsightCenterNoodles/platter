@@ -10,7 +10,9 @@ colabrodo_common = {git = 'https://github.com/InsightCenterNoodles/colabrodo', r
 colabrodo_server = {git = 'https://github.com/InsightCenterNoodles/colabrodo', rev = "e5ec9d6731907bccb836e3c5adf9cd63395ba9f2"}
 env_logger = "0.10"
 gltf = "1.1"
+local-ip-address = "0.5.7"
 log = "0.4"
+mdns-sd = "0.10.4"
 nalgebra = "0.32"
 notify = {version = "5.1", default-features = false, features = ["macos_kqueue"]}
 num-traits = "0.2.15"

@@ -25,6 +25,32 @@ async fn command_handler(
     }
 }
 
+fn mdns_publish(port: u16) -> mdns_sd::ServiceDaemon {
+    let mdns = mdns_sd::ServiceDaemon::new().expect("unable to create mdns daemon");
+
+    const SERVICE_TYPE: &'static str = "_noodles._tcp.local.";
+    const INSTANCE_NAME: &'static str = "platter";
+
+    if let Ok(nif) = local_ip_address::list_afinet_netifas() {
+        for (_, ip) in nif.iter().filter(|f| f.1.is_ipv4()) {
+            let ip_str = ip.to_string();
+            let host = format!("{}.local.", ip);
+
+            let srv_info =
+                mdns_sd::ServiceInfo::new(SERVICE_TYPE, INSTANCE_NAME, &host, ip_str, port, None)
+                    .expect("unable to  build MDNS service information");
+
+            log::info!("registering MDNS SD on {}", ip);
+
+            if mdns.register(srv_info).is_err() {
+                log::warn!("unable to register MDNS SD for {}", ip);
+            }
+        }
+    }
+
+    mdns
+}
+
 #[tokio::main]
 async fn main() {
     if env::var("RUST_LOG").is_err() {
@@ -114,6 +140,10 @@ async fn main() {
 
     log::info!("Starting up.");
 
+    let mdns = mdns_publish(opts.host.port().unwrap());
+
     // Launch the main noodles task and wait for it to complete
     server_main(opts, server_state).await;
+
+    mdns.shutdown().unwrap();
 }
