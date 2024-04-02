@@ -32,6 +32,9 @@ pub struct PlatterInit {
     /// What constitutes a 'large' buffer. Buffers smaller than this will be
     /// possibly sent inline
     pub size_large_limit: u64,
+
+    /// User asks to rescale using this factor
+    pub resize: f32,
 }
 
 /// Our server state
@@ -150,8 +153,15 @@ impl PlatterState {
         self.root_to_item.insert(ent.clone(), id);
 
         {
+            let rescale = self.init.resize;
+            let rescale = nalgebra_glm::vec3(rescale, rescale, rescale);
+            let rescale = nalgebra_glm::scaling(&rescale);
+
+            let rescale: [f32; 16] = rescale.as_slice().try_into().unwrap();
+
             ServerEntityStateUpdatable {
                 methods_list: Some(self.methods.clone()),
+                transform: Some(rescale),
                 ..Default::default()
             }
             .patch(&ent);

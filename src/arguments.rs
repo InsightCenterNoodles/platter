@@ -51,6 +51,10 @@ pub struct Arguments {
     /// Size in bytes of a 'large' mesh. Large meshes will not be sent inline.
     #[arg(short, long, default_value_t = 4096)]
     pub size_large_limit: u64,
+
+    ///Rescale content to fit the given dimensions
+    #[arg(short, long)]
+    pub rescale: Option<f32>,
 }
 
 pub fn get_arguments() -> Arguments {

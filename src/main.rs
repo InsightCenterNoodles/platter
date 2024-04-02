@@ -86,6 +86,7 @@ async fn main() {
         watcher_command_stream: watcher_tx,
         asset_store: asset_server.clone(),
         size_large_limit: args.size_large_limit,
+        resize: args.rescale.unwrap_or(1.0),
     };
 
     // take a copy of the command sender to move into the watcher command task

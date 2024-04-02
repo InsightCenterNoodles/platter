@@ -184,7 +184,7 @@ mod test {
 
     use colabrodo_server::server::tokio;
     use serial_test::serial;
-    use tempdir::TempDir;
+    use tempfile::TempDir;
 
     use crate::{
         arguments::Directory,
@@ -192,7 +192,7 @@ mod test {
     };
 
     fn make_test_dir() -> TempDir {
-        TempDir::new("platter_testing").expect("unable to create temp dir")
+        TempDir::new().expect("unable to create temp dir")
     }
 
     fn get_asset(asset_name: &str) -> PathBuf {
