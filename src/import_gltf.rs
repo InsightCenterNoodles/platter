@@ -543,7 +543,7 @@ pub fn import_file(
         })
         .collect();
 
-    log::debug!("Added {} meshes", n_geoms.len());
+    log::debug!("Added {}/{} meshes", n_geoms.len(), gltf.meshes().len());
 
     let mut n_nodes = HashMap::<usize, EntityReference>::new();
 

@@ -52,9 +52,13 @@ pub struct Arguments {
     #[arg(short, long, default_value_t = 4096)]
     pub size_large_limit: u64,
 
-    ///Rescale content to fit the given dimensions
+    ///Rescale content by this factor
     #[arg(short, long)]
     pub rescale: Option<f32>,
+
+    ///Offset content by a vector as provided by a string
+    #[arg(short, long)]
+    pub offset: Option<String>,
 }
 
 pub fn get_arguments() -> Arguments {

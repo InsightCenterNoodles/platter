@@ -81,12 +81,22 @@ async fn main() {
     // Prep streams for the watcher controller
     let (watcher_tx, mut watcher_rx) = tokio::sync::mpsc::unbounded_channel();
 
+    let offset = args.offset.map(|f| {
+        let mut iter = f.split(",").map(|g| g.trim().parse().unwrap());
+        nalgebra_glm::Vec3::new(
+            iter.next().unwrap_or_default(),
+            iter.next().unwrap_or_default(),
+            iter.next().unwrap_or_default(),
+        )
+    });
+
     let init = platter_state::PlatterInit {
         command_stream: command_tx.clone(),
         watcher_command_stream: watcher_tx,
         asset_store: asset_server.clone(),
         size_large_limit: args.size_large_limit,
         resize: args.rescale.unwrap_or(1.0),
+        offset: offset.unwrap_or_default(),
     };
 
     // take a copy of the command sender to move into the watcher command task

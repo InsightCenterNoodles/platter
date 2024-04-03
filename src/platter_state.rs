@@ -35,6 +35,9 @@ pub struct PlatterInit {
 
     /// User asks to rescale using this factor
     pub resize: f32,
+
+    /// User asks to translate
+    pub offset: nalgebra_glm::Vec3,
 }
 
 /// Our server state
@@ -153,9 +156,12 @@ impl PlatterState {
         self.root_to_item.insert(ent.clone(), id);
 
         {
+            let offset = self.init.offset;
+            let offset = nalgebra_glm::translation(&offset);
+
             let rescale = self.init.resize;
             let rescale = nalgebra_glm::vec3(rescale, rescale, rescale);
-            let rescale = nalgebra_glm::scaling(&rescale);
+            let rescale = nalgebra_glm::scale(&offset, &rescale);
 
             let rescale: [f32; 16] = rescale.as_slice().try_into().unwrap();
 
