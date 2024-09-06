@@ -36,6 +36,10 @@ fn mdns_publish(port: u16) -> mdns_sd::ServiceDaemon {
             let ip_str = ip.to_string();
             let host = format!("{}.local.", ip);
 
+            if ip.to_string().contains("10.15.88") {
+                continue;
+            }
+
             let srv_info =
                 mdns_sd::ServiceInfo::new(SERVICE_TYPE, INSTANCE_NAME, &host, ip_str, port, None)
                     .expect("unable to  build MDNS service information");

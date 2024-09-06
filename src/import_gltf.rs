@@ -297,7 +297,6 @@ fn recursive_convert_node(
         // but we need to take a nested 4x4 array to a 16x1 array. There's a nightly call, but we don't want to require it.
         // And i dont want to have to use transmute
         let tf = node.transform().matrix();
-        log::debug!("Node transform is: {tf:?}");
         let mut ret = [0.0; 16];
         let mut count: usize = 0;
 
@@ -314,6 +313,8 @@ fn recursive_convert_node(
 
         ret
     };
+
+    log::debug!("Node transform is: {tf:?}");
 
     // Determine the representation
     let rep: Option<ServerEntityRepresentation> = node.mesh().map(|f| {

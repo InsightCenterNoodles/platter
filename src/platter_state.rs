@@ -155,7 +155,7 @@ impl PlatterState {
 
         self.root_to_item.insert(ent.clone(), id);
 
-        {
+        if false {
             let offset = self.init.offset;
             let offset = nalgebra_glm::translation(&offset);
 
@@ -164,6 +164,8 @@ impl PlatterState {
             let rescale = nalgebra_glm::scale(&offset, &rescale);
 
             let rescale: [f32; 16] = rescale.as_slice().try_into().unwrap();
+
+            log::debug!("Resetting scale tf: {rescale:?}");
 
             ServerEntityStateUpdatable {
                 methods_list: Some(self.methods.clone()),

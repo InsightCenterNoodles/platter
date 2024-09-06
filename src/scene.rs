@@ -49,7 +49,6 @@ impl Scene {
             position: Translation3::identity(),
             rotation: UnitQuaternion::identity(),
             scale: Scale3::identity(),
-            //scale: Scale3::new(0.001, 0.001, 0.001),
             published: assets,
             root,
             asset_store,
